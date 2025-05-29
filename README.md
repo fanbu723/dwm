@@ -1,1 +1,1 @@
-/usr/share/xsessions/dwm.desktop
+cp /usr/share/xsessions/dwm.desktop
