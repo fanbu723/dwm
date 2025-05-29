@@ -1,0 +1,13 @@
+configuration {
+  // 启用 combi 模式并指定子模式
+  modi: "window,drun,ssh";
+  // 字体设置（必须用逗号分隔属性）
+  font: "Maple Mono CN Bold,size=12";
+  // 图标主题与显示
+  icon-theme: "Papirus";
+  show-icons: true;
+  // 其他优化
+  show-mode-icons: true;
+  combi-mix: true;
+  window-width: 70%;
+}
