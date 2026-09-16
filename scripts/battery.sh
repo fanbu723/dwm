@@ -1,39 +1,31 @@
-#!/bin/bash
+#!/bin/sh
+# dwmblocks 模块：电量
+# 依赖：无（读取 /sys/class/power_supply），读不到时回退 acpi
+#
+# 输出：充电中为 "78%+"，放电 / 满电为 "78%"；无电池则为 "—"
 
-get_battery_combined_percent() {
-    # 获取电池电量和数量
-    total_charge=$(acpi -b | grep -o '[0-9]\+%' | tr -d '%')
-    battery_number=$(echo "$total_charge" | wc -l)
+percent=0
+count=0
+charging=""
 
-    if [ "$battery_number" -eq 0 ]; then
-        echo "没有检测到电池。"
-        return 1
-    fi
+for bat in /sys/class/power_supply/BAT*; do
+	[ -r "$bat/capacity" ] || continue
+	percent=$((percent + $(cat "$bat/capacity")))
+	count=$((count + 1))
+	[ "$(cat "$bat/status" 2>/dev/null)" = "Charging" ] && charging=1
+done
 
-    # 计算总电量和平均电量
-    total_charge=$(echo "$total_charge" | paste -sd+ | bc)
-    percent=$((total_charge / battery_number))
+if [ "$count" -gt 0 ]; then
+	printf '%s%%%s\n' "$((percent / count))" "${charging:++}"
+	exit 0
+fi
 
-    # 检查充电状态
-    charging=$(acpi -b | grep -m 1 -E 'Discharging|Charging')
+if command -v acpi >/dev/null 2>&1; then
+	acpi -b 2>/dev/null | awk 'NR == 1 {
+		if (match($0, /[0-9]+%/)) p = substr($0, RSTART, RLENGTH)
+		if (p != "") printf "%s%s\n", p, (index($0, "Charging") ? "+" : "")
+	}'
+	exit 0
+fi
 
-    # 确定图标
-    case $percent in
-        [0-3][0-9]) icon="" ;;  # 0-33%
-        [4-6][0-9]) icon="" ;;  # 34-66%
-        *) icon="" ;;            # 67-100%
-    esac
-
-    # 充电状态下调整图标
-    [[ $charging == *"Charging"* ]] && {
-        case $icon in
-            "") icon="" ;;  # 充电时低电量
-            "") icon="" ;;  # 充电时中电量
-            "") icon="" ;;  # 充电时高电量
-        esac
-    }
-
-    printf "%s %s%%\n" "$icon" "$percent"
-}
-
-get_battery_combined_percent
+printf '%s\n' "—"

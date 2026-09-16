@@ -1,5 +1,8 @@
 /* See LICENSE file for copyright and license details. */
 
+/* XF86 多媒体键（音量 / 亮度）依赖此头文件 */
+#include <X11/XF86keysym.h>
+
 /* appearance */
 static const unsigned int borderpx  = 1;        /* border pixel of windows */
 static const unsigned int snap      = 32;       /* snap pixel */
@@ -81,6 +84,19 @@ static const char *termcmd[]  = { "kitty", NULL};
 static const char scratchpadname[] = "scratchpad";
 static const char *scratchpadcmd[] = { "kitty", "-t", scratchpadname, "-g", "120x34", NULL };
 
+/* 音量 / 亮度
+ *   音量：pactl（PipeWire / PulseAudio）→ amixer（ALSA）
+ *   亮度：brightnessctl → xbacklight
+ * blocks.h 中这两个模块的 signal = 11 且 interval = 0，
+ * 只在收到信号时刷新，所以每次调整后都必须通知 dwmblocks。
+ */
+#define AUDIO_UP       "pactl set-sink-volume @DEFAULT_SINK@ +5% 2>/dev/null || amixer -q set Master 5%+"
+#define AUDIO_DOWN     "pactl set-sink-volume @DEFAULT_SINK@ -5% 2>/dev/null || amixer -q set Master 5%-"
+#define AUDIO_MUTE     "pactl set-sink-mute @DEFAULT_SINK@ toggle 2>/dev/null || amixer -q set Master toggle"
+#define BRIGHT_UP      "command -v brightnessctl >/dev/null 2>&1 && brightnessctl -q set +5% || xbacklight -inc 5"
+#define BRIGHT_DOWN    "command -v brightnessctl >/dev/null 2>&1 && brightnessctl -q set 5%- || xbacklight -dec 5"
+#define REFRESH_STATUS "pkill -RTMIN+11 dwmblocks"
+
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
 	{ MODKEY,                       XK_r,      spawn,          {.v = roficmd } },
@@ -111,6 +127,15 @@ static const Key keys[] = {
 	{ MODKEY|Mod4Mask,              XK_o,      incrohgaps,     {.i = -1 } },
 	{ MODKEY|ShiftMask,             XK_y,      incrovgaps,     {.i = +1 } },
 	{ MODKEY|ShiftMask,             XK_o,      incrovgaps,     {.i = -1 } },
+	/* 音量 / 亮度：XF86 多媒体键，无需修饰键 */
+	{ 0,                            XF86XK_AudioRaiseVolume,  spawn, SHCMD(AUDIO_UP       "; " REFRESH_STATUS) },
+	{ 0,                            XF86XK_AudioLowerVolume,  spawn, SHCMD(AUDIO_DOWN     "; " REFRESH_STATUS) },
+	{ 0,                            XF86XK_AudioMute,         spawn, SHCMD(AUDIO_MUTE     "; " REFRESH_STATUS) },
+	{ 0,                            XF86XK_MonBrightnessUp,   spawn, SHCMD(BRIGHT_UP      "; " REFRESH_STATUS) },
+	{ 0,                            XF86XK_MonBrightnessDown, spawn, SHCMD(BRIGHT_DOWN    "; " REFRESH_STATUS) },
+	/* 没有多媒体键时的替代绑定 */
+	{ MODKEY,                       XK_equal,  spawn,          SHCMD(AUDIO_UP       "; " REFRESH_STATUS) },
+	{ MODKEY,                       XK_minus,  spawn,          SHCMD(AUDIO_DOWN     "; " REFRESH_STATUS) },
 	{ MODKEY,                       XK_Return, zoom,           {0} },
 	{ MODKEY,                       XK_Tab,    view,           {0} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
