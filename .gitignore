@@ -3,8 +3,9 @@ patches/*.diff
 
 # build artifacts
 *.o
-/dwm
+/src/dwm
 dwmblocks/dwmblocks
+/src/dwm-*.tar.gz
 
 # install.sh 覆盖已有文件时生成的备份
 *.bak.*

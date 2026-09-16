@@ -20,6 +20,9 @@ set -Eeuo pipefail
 
 SCRIPT_NAME="$(basename -- "${BASH_SOURCE[0]}")"
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SRC_DIR="${REPO_DIR}/src"           # dwm 源码
+BLOCKS_DIR="${REPO_DIR}/dwmblocks"  # 状态栏（独立子项目）
+EXTRAS_DIR="${REPO_DIR}/extras"     # 附赠配置（Hyprland / Waybar / Kitty / Rofi）
 
 PREFIX="/usr/local"
 MANPREFIX="${PREFIX}/share/man"
@@ -30,8 +33,8 @@ ENVD_DIR="${HOME}/.config/environment.d"
 XPROFILE="${HOME}/.xprofile"
 
 VERSION="unknown"
-[[ -r "${REPO_DIR}/config.mk" ]] \
-	&& VERSION="$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*//p' "${REPO_DIR}/config.mk" | head -n1)"
+[[ -r "${SRC_DIR}/config.mk" ]] \
+	&& VERSION="$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*//p' "${SRC_DIR}/config.mk" | head -n1)"
 
 # 构建依赖 / 运行依赖（官方仓库）
 PKGS_BUILD=(base-devel libx11 libxinerama libxft freetype2 fontconfig libxrender)
@@ -51,6 +54,7 @@ WITH_DEPS=true
 WITH_DWM=true
 WITH_DWMBLOCKS=true
 WITH_IME=true
+WITH_EXTRAS=false
 USE_SYSTEM_ENV=false
 DO_UNINSTALL=false
 
@@ -88,6 +92,7 @@ ${C_BOLD}选项${C_RESET}
       --no-deps            跳过依赖安装
       --no-dwm             跳过 dwm 编译安装
       --no-dwmblocks       跳过 dwmblocks 编译安装
+      --extras             额外部署 extras/ 到 ~/.config/（Hyprland / Waybar / Kitty / Rofi）
       --no-ime             跳过 fcitx5 / 雾凇拼音配置
       --system-env         输入法环境变量写入 /etc/environment（需 root，影响全局）
       --prefix DIR         安装前缀（默认 ${PREFIX}）
@@ -114,6 +119,7 @@ parse_args() {
 			--no-deps)          WITH_DEPS=false ;;
 			--no-dwm)           WITH_DWM=false ;;
 			--no-dwmblocks)     WITH_DWMBLOCKS=false ;;
+			--extras)           WITH_EXTRAS=true ;;
 			--no-ime)           WITH_IME=false ;;
 			--system-env)       USE_SYSTEM_ENV=true ;;
 			--prefix)           PREFIX="${2:?--prefix 需要一个参数}"; MANPREFIX="${PREFIX}/share/man"; shift ;;
@@ -222,8 +228,8 @@ install_file() {
 preflight() {
 	step "环境检查"
 
-	[[ -f "${REPO_DIR}/dwm.c" && -f "${REPO_DIR}/Makefile" ]] \
-		|| die "请在仓库根目录运行本脚本（当前：${REPO_DIR}）"
+	[[ -f "${SRC_DIR}/dwm.c" && -f "${SRC_DIR}/Makefile" ]] \
+		|| die "源码目录不完整：${SRC_DIR}（请在仓库根目录运行本脚本）"
 
 	have make || die "未找到 make，请先安装 base-devel"
 	have cc || have gcc || die "未找到 C 编译器，请先安装 base-devel"
@@ -306,25 +312,25 @@ install_deps() {
 
 build_dwm() {
 	step "编译 dwm ${VERSION}"
-	run make -C "${REPO_DIR}" clean
-	run make -C "${REPO_DIR}"
+	run make -C "${SRC_DIR}" clean
+	run make -C "${SRC_DIR}"
 	ok "dwm 编译完成"
 
 	step "安装 dwm → ${PREFIX}/bin"
-	as_root make -C "${REPO_DIR}" install PREFIX="${PREFIX}" MANPREFIX="${MANPREFIX}"
+	as_root make -C "${SRC_DIR}" install PREFIX="${PREFIX}" MANPREFIX="${MANPREFIX}"
 	ok "dwm 已安装"
 }
 
 build_dwmblocks() {
 	step "编译 dwmblocks"
-	[[ -f "${REPO_DIR}/dwmblocks/blocks.h" ]] \
+	[[ -f "${BLOCKS_DIR}/blocks.h" ]] \
 		|| warn "blocks.h 不存在，将使用上游默认模块定义（不影响 dwm 本身）"
-	run make -C "${REPO_DIR}/dwmblocks" clean
-	run make -C "${REPO_DIR}/dwmblocks"
+	run make -C "${BLOCKS_DIR}" clean
+	run make -C "${BLOCKS_DIR}"
 	ok "dwmblocks 编译完成"
 
 	step "安装 dwmblocks → ${PREFIX}/bin"
-	as_root make -C "${REPO_DIR}/dwmblocks" install PREFIX="${PREFIX}"
+	as_root make -C "${BLOCKS_DIR}" install PREFIX="${PREFIX}"
 	ok "dwmblocks 已安装"
 }
 
@@ -339,7 +345,7 @@ sync_blocks_path() {
 
 	escaped="$(printf '%s' "$AUTOSTART_DIR" | sed 's/[&|\\]/\\&/g')"
 	log "同步 blocks.h 中的脚本路径：${old_prefix} → ${AUTOSTART_DIR}"
-	run sed -i "s|${old_prefix}|${escaped}|g" "${REPO_DIR}/dwmblocks/blocks.h"
+	run sed -i "s|${old_prefix}|${escaped}|g" "${BLOCKS_DIR}/blocks.h"
 	warn "blocks.h 已修改，需要重新编译 dwmblocks"
 }
 
@@ -356,10 +362,10 @@ deploy_autostart() {
 
 	run mkdir -p "${AUTOSTART_DIR}/scripts"
 
-	install_file "${REPO_DIR}/autostart.sh" "${AUTOSTART_DIR}/autostart.sh" 755
+	install_file "${REPO_DIR}/scripts/autostart.sh" "${AUTOSTART_DIR}/autostart.sh" 755
 
 	local s
-	for s in "${REPO_DIR}"/scripts/*.sh; do
+	for s in "${REPO_DIR}"/scripts/statusbar/*.sh; do
 		[[ -e "$s" ]] || continue
 		install_file "$s" "${AUTOSTART_DIR}/scripts/$(basename -- "$s")" 755
 	done
@@ -380,6 +386,39 @@ install_session() {
 	step "安装 XSession 会话文件"
 	as_root install -Dm644 "${REPO_DIR}/dwm.desktop" "${XSESSIONS_DIR}/dwm.desktop"
 	ok "已安装 ${XSESSIONS_DIR}/dwm.desktop"
+}
+
+# --------------------------------------------------------------------------- #
+# 步骤 5.5：附赠配置（可选，--extras）
+# --------------------------------------------------------------------------- #
+
+# extras/<name>/ → ~/.config/<name>/
+install_extras() {
+	step "部署附赠配置（extras/ → ~/.config/）"
+
+	local d name target bak
+	for d in "${EXTRAS_DIR}"/*/; do
+		[[ -d "$d" ]] || continue
+		name="$(basename -- "$d")"
+		target="${HOME}/.config/${name}"
+
+		if [[ $DRY_RUN == true ]]; then
+			printf '%s  [dry-run]%s 部署 %s → %s\n' "$C_CYAN" "$C_RESET" "${d%/}" "$target"
+			continue
+		fi
+
+		if [[ -d "$target" ]]; then
+			bak="${target}.bak.$(date +%Y%m%d%H%M%S)"
+			cp -a -- "$target" "$bak"
+			warn "已备份原配置 → ${bak}"
+		fi
+
+		mkdir -p "$target"
+		cp -a -- "${d}." "$target"/
+		ok "部署 ${name} → ${target}"
+	done
+
+	ok "附赠配置部署完成（登录界面选择 Hyprland 会话后生效）"
 }
 
 # --------------------------------------------------------------------------- #
@@ -514,6 +553,7 @@ do_uninstall() {
 	log "${XPROFILE} 中 'dwm install.sh: ime' 标记之间的内容"
 	log "/etc/environment 中 'dwm install.sh: ime' 标记之间的内容（若用过 --system-env）"
 	log "${RIME_DIR}/default.custom.yaml（Rime 方案配置）"
+	log "~/.config/{hypr,waybar,kitty,rofi}（若用过 --extras）"
 
 	step "卸载完成"
 }
@@ -553,13 +593,18 @@ main() {
 		setup_ime
 	fi
 
+	if [[ $WITH_EXTRAS == true ]]; then
+		install_extras
+	fi
+
 	step "全部完成"
 	cat <<EOF
 
 下一步：
   1. 注销并重新登录，在登录界面选择 "Dwm" 会话
   2. 首次启动后确认状态栏正常：pkill -RTMIN+11 dwmblocks 可手动刷新音量/亮度
-  3. 修改 config.h 或 blocks.h 后需重新执行 ./${SCRIPT_NAME}（或手动 make）
+  3. 修改 src/config.h 或 dwmblocks/blocks.h 后需重新执行 ./${SCRIPT_NAME}
+     （或手动 make -C src / make -C dwmblocks）
 
 EOF
 
