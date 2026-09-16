@@ -20,6 +20,8 @@ dwmblocks: dwmblocks.c blocks.def.h blocks.h
 	${CC} -o dwmblocks dwmblocks.c ${CFLAGS} ${LDFLAGS}
 
 blocks.h:
+	@echo "blocks.h 不存在，正在从上游默认模板生成……"
+	@echo "注意：blocks.h 是本地配置（脚本路径写死为 ~/.dwm/scripts），生成后请按需修改。"
 	cp blocks.def.h $@
 
 clean:
