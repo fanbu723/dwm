@@ -1,2 +1,10 @@
 .vscode/
 patches/*.diff
+
+# build artifacts
+*.o
+/dwm
+dwmblocks/dwmblocks
+
+# install.sh 覆盖已有文件时生成的备份
+*.bak.*

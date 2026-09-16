@@ -239,7 +239,6 @@ static void restack(Monitor *m);
 static void rotatestack(const Arg *arg);
 static void run(void);
 static void runautostart(void);
-static void runAutostart(void);
 static void scan(void);
 static int sendevent(Window w, Atom proto, int m, long d0, long d1, long d2, long d3, long d4);
 static void sendmon(Client *c, Monitor *m);
@@ -1719,12 +1718,6 @@ run(void)
 }
 
 void
-runAutostart(void) {
-	system("cd ~/.dwm; ./autostart_blocking.sh");
-	system("cd ~/.dwm; ./autostart.sh &");
-}
-
-void
 runautostart(void)
 {
 	char *pathpfx;
@@ -1783,6 +1776,7 @@ runautostart(void)
 	if (sprintf(path, "%s/%s", pathpfx, autostartblocksh) <= 0) {
 		free(path);
 		free(pathpfx);
+		return;
 	}
 
 	if (access(path, X_OK) == 0)
@@ -1792,6 +1786,7 @@ runautostart(void)
 	if (sprintf(path, "%s/%s", pathpfx, autostartsh) <= 0) {
 		free(path);
 		free(pathpfx);
+		return;
 	}
 
 	if (access(path, X_OK) == 0)
@@ -2454,7 +2449,6 @@ unmapnotify(XEvent *e)
 void
 updatebars(void)
 {
-	unsigned int w;
 	Monitor *m;
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
@@ -2467,9 +2461,6 @@ updatebars(void)
 	for (m = mons; m; m = m->next) {
 		if (m->barwin)
 			continue;
-		w = m->ww;
-		if (showsystray && m == systraytomon(m))
-			w -= getsystraywidth();
 		m->barwin = XCreateWindow(dpy, root, m->wx, m->by, m->ww, bh, 0, depth,
 		                          InputOutput, visual,
 		                          CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWColormap|CWEventMask, &wa);
@@ -3006,7 +2997,7 @@ main(int argc, char *argv[])
 		die("pledge");
 #endif /* __OpenBSD__ */
 	scan();
-	runAutostart();
+	runautostart();
 	run();
 	cleanup();
 	XCloseDisplay(dpy);
