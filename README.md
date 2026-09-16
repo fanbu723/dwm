@@ -15,34 +15,50 @@
 - **dwmblocks** 状态栏：网速 / CPU / 内存 / 音量 / 亮度 / 电量 / 时间
 - **一键安装脚本** `install.sh`：幂等、支持 `--dry-run`、支持 `--uninstall`
 - **fcitx5 + 雾凇拼音** 自动配置（含环境变量）
-- 附赠 **Hyprland** 完整配置（`config/`），与 dwm 可共存
+- 附赠 **Hyprland** 完整配置（`extras/`），与 dwm 共存互不影响
 
 ---
 
 ## 📁 目录结构
 
+按「编译产物 / 运行时脚本 / 文档」分层，根目录只留入口和文档：
+
 ```
 dwm/
-├── dwm.c drw.c util.c        # dwm 源码（已打补丁）
-├── config.h                  # ★ dwm 配置（改完需重新编译）
-├── config.def.h              # 上游默认配置模板
-├── config.mk                 # 编译参数（PREFIX / VERSION 等）
-├── Makefile
-├── dwm.desktop               # XSession 会话文件（安装到 /usr/share/xsessions）
-├── autostart.sh              # ★ dwm 启动后自动执行的脚本
-├── scripts/                  # ★ 状态栏脚本（部署到 ~/.dwm/scripts）
-│   ├── wlan.sh  cpu.sh  memory.sh  volume.sh
-│   └── backlight.sh  battery.sh  date.sh
-├── dwmblocks/                # 状态栏程序
+├── src/                      # dwm 本体（上游源码 + 编译配置）
+│   ├── dwm.c  drw.c  drw.h  util.c  util.h  transient.c
+│   ├── config.h              # ★ dwm 配置（改完需重新编译）
+│   ├── config.def.h          # 上游默认配置模板
+│   ├── config.mk             # 编译参数（PREFIX / VERSION 等）
+│   ├── Makefile
+│   └── dwm.1                 # man page
+├── dwmblocks/                # 状态栏（独立子项目，自带 Makefile 与 LICENSE）
 │   ├── dwmblocks.c
 │   ├── blocks.h              # ★ 状态栏模块定义（改完需重新编译）
 │   └── blocks.def.h          # 上游默认模块定义
+├── scripts/                  # 部署到 ~/.dwm 的运行时脚本
+│   ├── autostart.sh          #   → ~/.dwm/autostart.sh
+│   └── statusbar/            #   → ~/.dwm/scripts/
+│       ├── wlan.sh  cpu.sh  memory.sh  volume.sh
+│       └── backlight.sh  battery.sh  date.sh
+├── extras/                   # 附赠配置（Hyprland / Waybar / Kitty / Rofi）
 ├── patches/                  # 补丁存档与说明
-├── config/                   # 附赠配置（Hyprland / Waybar / Kitty / Rofi）
-└── install.sh                # ★ 一键安装脚本
+├── dwm.desktop               # XSession 会话文件（安装到 /usr/share/xsessions）
+├── dwm.png                   # README 预览图
+├── install.sh                # ★ 唯一安装入口
+├── LICENSE
+└── README.md
 ```
 
-路径规则：`blocks.h` 中写死了 `~/.dwm/scripts/xxx.sh`，因此脚本必须部署到 `~/.dwm/scripts/`。
+几条路径规则，改文件前先看一眼：
+
+| 规则 | 说明 |
+| --- | --- |
+| `src/` 只负责 dwm 本体 | `make -C src`、`sudo make -C src install` |
+| 打补丁要进 `src/` | `patch -d src -p1 < patches/xxx.diff`（见 `patches/README.md`） |
+| `scripts/statusbar/` → `~/.dwm/scripts/` | `blocks.h` 里写死了 `~/.dwm/scripts/xxx.sh`，目录名即部署目标 |
+| `extras/<name>/` → `~/.config/<name>/` | 附赠配置，`install.sh --extras` 才会部署 |
+| 安装统一走 `install.sh` | 它是唯一入口，`Makefile` 只管各自编译 |
 
 ---
 
@@ -62,9 +78,9 @@ dwm/
 | --- | --- | --- |
 | `kitty` | 终端（`config.h` 中 `termcmd`） | 必需 |
 | `rofi` | 应用启动器（`Super + r`） | 必需 |
-| `feh` | 设置壁纸 | `autostart.sh` |
-| `picom` | 窗口合成器（透明 / 阴影） | `autostart.sh` |
-| `dunst` | 通知守护进程 | `autostart.sh` |
+| `feh` | 设置壁纸 | `scripts/autostart.sh` |
+| `picom` | 窗口合成器（透明 / 阴影） | `scripts/autostart.sh` |
+| `dunst` | 通知守护进程 | `scripts/autostart.sh` |
 | `fcitx5-im` `fcitx5-rime` | 输入法 | 可选 |
 | `rime-ice-git`（AUR） | 雾凇拼音方案 | 可选 |
 | `maplemono-cn`（AUR） | 界面字体 `Maple Mono CN` | 可选 |
@@ -97,6 +113,7 @@ cd dwm
 | `-y, --yes` | 所有询问自动回答 yes |
 | `--no-deps` | 跳过依赖安装 |
 | `--no-ime` | 跳过 fcitx5 / 雾凇拼音配置 |
+| `--extras` | 额外把 `extras/` 部署到 `~/.config/`（Hyprland / Waybar / Kitty / Rofi） |
 | `--no-dwmblocks` | 不编译安装状态栏 |
 | `--system-env` | 把输入法环境变量写入 `/etc/environment`（需 root，影响全局） |
 | `--prefix DIR` | 安装前缀，默认 `/usr/local` |
@@ -106,12 +123,15 @@ cd dwm
 ### 脚本做了什么
 
 1. 检测系统（Arch 系）并安装缺失依赖
-2. `make` 编译 dwm → `sudo make install`（默认装到 `/usr/local/bin`）
+2. `make -C src` 编译 dwm → `sudo make -C src install`（默认装到 `/usr/local/bin`）
 3. 编译安装 `dwmblocks`
-4. 部署 `autostart.sh` 与 `scripts/` 到 `~/.dwm`，并补齐可执行权限
+4. 部署 `scripts/autostart.sh` → `~/.dwm/autostart.sh`、
+   `scripts/statusbar/*.sh` → `~/.dwm/scripts/`，并补齐可执行权限
 5. 安装 `dwm.desktop` 到 `/usr/share/xsessions/`
 6. 写入 fcitx5 环境变量（用户级，见下）并生成 `~/.local/share/fcitx5/rime/default.custom.yaml`
 7. 检查 `~/.dwm` 与 dwm 实际查找路径是否一致（见 FAQ）
+
+加 `--extras` 时另外把 `extras/<name>/` 复制到 `~/.config/<name>/`（覆盖前自动备份）。
 
 ---
 
@@ -123,15 +143,14 @@ sudo pacman -S --needed base-devel libx11 libxinerama libxft freetype2 fontconfi
     libxrender kitty rofi feh picom dunst
 yay -S fcitx5-im fcitx5-rime rime-ice-git maplemono-cn
 
-# 2. 编译安装
-make && sudo make install
+# 2. 编译安装 dwm 与状态栏
+make -C src && sudo make -C src install
 make -C dwmblocks && sudo make -C dwmblocks install
 
-# 3. 部署自启与脚本
-mkdir -p ~/.dwm
-cp autostart.sh ~/.dwm/
-cp -r scripts ~/.dwm/
-chmod +x ~/.dwm/autostart.sh ~/.dwm/scripts/*.sh
+# 3. 部署自启与状态栏脚本
+mkdir -p ~/.dwm/scripts
+install -m755 scripts/autostart.sh ~/.dwm/autostart.sh
+install -m755 scripts/statusbar/*.sh ~/.dwm/scripts/
 
 # 4. 会话文件
 sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
@@ -312,7 +331,7 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 
 ### config.h
 
-改完必须 `make && sudo make install` 重新编译。
+改完必须重新编译：`make -C src && sudo make -C src install`（或直接 `./install.sh`）。
 
 | 变量 | 当前值 | 说明 |
 | --- | --- | --- |
@@ -330,14 +349,15 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 
 | 模块 | 脚本 | 间隔(秒) | 信号 |
 | --- | --- | --- | --- |
-| 网速 | `scripts/wlan.sh` | 1 | — |
-| CPU | `scripts/cpu.sh` | 5 | — |
-| 内存 | `scripts/memory.sh` | 3 | — |
-| 音量 | `scripts/volume.sh` | 0 | **11** |
-| 亮度 | `scripts/backlight.sh` | 0 | **11** |
-| 电量 | `scripts/battery.sh` | 2 | — |
-| 时间 | `scripts/date.sh` | 1 | — |
+| 网速 | `scripts/statusbar/wlan.sh` | 1 | — |
+| CPU | `scripts/statusbar/cpu.sh` | 5 | — |
+| 内存 | `scripts/statusbar/memory.sh` | 3 | — |
+| 音量 | `scripts/statusbar/volume.sh` | 0 | **11** |
+| 亮度 | `scripts/statusbar/backlight.sh` | 0 | **11** |
+| 电量 | `scripts/statusbar/battery.sh` | 2 | — |
+| 时间 | `scripts/statusbar/date.sh` | 1 | — |
 
+> 上表是**仓库内**的路径；部署后都在 `~/.dwm/scripts/`（`blocks.h` 里写死的就是后者）。
 > 模块之间用 `delim` 分隔，当前为 `" | "`。
 
 > **间隔为 0 的模块只在收到信号时刷新**，也就是音量和亮度。
@@ -370,7 +390,7 @@ yay -S maplemono-cn
 
 ---
 
-## ⌨️ 输入法（fcitx5 + 雾凇拼音）
+## 🀄 输入法（fcitx5 + 雾凇拼音）
 
 `install.sh` 默认会：
 
@@ -391,6 +411,37 @@ GLFW_IM_MODULE=ibus
 > 加 `--system-env` 才会写入 `/etc/environment`（用 `sudo tee -a` 追加，需重新登录才生效）。
 
 改完别忘了重启 fcitx5 或重新部署 Rime（右键托盘图标 → 重新部署）。
+
+---
+
+## 🎁 附赠配置（extras/）
+
+`extras/` 里是另一套桌面环境 —— **Hyprland** —— 的配置，与 dwm **完全独立**：
+不装它 dwm 照常工作，装了也只是多一个可选的登录会话，两者可以自由切换。
+
+| 仓库路径 | 部署目标 | 内容 |
+| --- | --- | --- |
+| `extras/hypr/` | `~/.config/hypr/` | `hyprland.conf`（主配置）、`hyprpaper.conf`（壁纸） |
+| `extras/waybar/` | `~/.config/waybar/` | 状态栏 `config.jsonc` / `style.css` / `scripts/waybar-wttr.py` |
+| `extras/kitty/` | `~/.config/kitty/` | 终端配置（dwm 与 Hyprland 共用） |
+| `extras/rofi/` | `~/.config/rofi/` | 启动器主题（同样共用） |
+
+部署方式二选一：
+
+```bash
+# 方式一：跟着主流程一起装（推荐，覆盖前自动备份）
+./install.sh --extras
+
+# 方式二：手动复制
+for d in hypr waybar kitty rofi; do
+    mkdir -p ~/.config/"$d"
+    cp -r extras/"$d"/. ~/.config/"$d"/
+done
+```
+
+> `kitty` 与 `rofi` 两套配置对 dwm 和 Hyprland 都生效，改一处两边都变。
+> Hyprland 的输入法沿用同一套 fcitx5 配置，`install.sh` 写入的环境变量
+> （`~/.config/environment.d/10-ime.conf`、`~/.xprofile`）对两者都有效。
 
 ---
 
@@ -438,7 +489,9 @@ GLFW_IM_MODULE=ibus
 **Q：状态栏图标显示成方块？**
 缺少 `Maple Mono CN` 字体或该字体不含对应 Nerd Font 字形。
 
-**Q：改了 `config.h` / `blocks.h` 没变化？**
+**Q：改了 `c：dwm 需 `make -C src && sudo make -C src install`，
+状态栏需 `make -C dwmblocks && sudo make -C dwmblocks install`（或直接 `./install.sh`），
+然后
 两者都是编译期配置，需要重新 `make`（dwm）或 `make -C dwmblocks`，并重新登录。
 
 ---

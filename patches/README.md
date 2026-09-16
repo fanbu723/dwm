@@ -36,11 +36,15 @@
 
 ## 打补丁
 
+dwm 源码在 `src/`，所以补丁要指定目录：
+
 ```sh
-patch -p1 < patches/dwm-fullscreen-6.2.diff
+patch -d src -p1 < patches/dwm-fullscreen-6.2.diff
 ```
 
+打完后重新编译：`make -C src && sudo make -C src install`。
+
 注意：本目录中的 diff 基于 dwm 6.2，而当前源码为 dwm 6.4，
-直接应用很可能出现 hunk failed，请以 `dwm.c` 的实际代码为准。
+直接应用很可能出现 hunk failed，请以 `src/dwm.c` 的实际代码为准。
 
 补丁来源：<https://dwm.suckless.org/patches/>
