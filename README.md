@@ -162,6 +162,11 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 
 `MODKEY` = **Super（Win）**。注意本配置中 `MODKEY|Mod4Mask` 与 `MODKEY` 等价，属于冗余绑定（见 FAQ）。
 
+> 本节按**本仓库的实际配置**（`MODKEY = Super`）书写。
+> 上游默认配置用的是 `Mod1`（Alt），两者的差异见文末「与上游默认键位对照」。
+> 各键位的图解说明可参考 [Dave's Visual Guide to dwm](https://ratfactor.com/dwm)
+> （该文基于默认 Alt 键位）。
+
 ### 启动 / 基础
 
 | 快捷键 | 功能 |
@@ -170,10 +175,22 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `Super + r` | 应用启动器 rofi（`rofi -show drun`） |
 | ``Super + ` `` | 呼出 / 隐藏暂存终端 scratchpad |
 | `Super + b` | 显示 / 隐藏状态栏 |
-| `Super + Enter` | 将当前窗口放大为主窗口（zoom） |
+| `Super + Enter` | 窗口在主区 / 栈区之间切换（zoom） |
 | `Super + Tab` | 切回上一个视图 |
 | `Super + Shift + c` | 关闭当前窗口 |
 | `Super + Shift + q` | 退出 dwm |
+
+### 音量 / 亮度
+
+| 快捷键 | 功能 |
+| --- | --- |
+| `XF86 音量+` / `音量−` | 音量 ±5%（`pactl`，回退 `amixer`） |
+| `XF86 静音` | 切换静音 |
+| `XF86 亮度+` / `亮度−` | 亮度 ±5%（`brightnessctl`，回退 `xbacklight`） |
+| `Super + =` / `Super + -` | 音量 ±5%（键盘没有多媒体键时的替代绑定） |
+
+> 这些绑定末尾都附带 `pkill -RTMIN+11 dwmblocks`：音量与亮度在 `blocks.h` 中
+> `interval = 0`，不发信号状态栏不会刷新，详见「状态栏信号」。
 
 ### 布局
 
@@ -186,13 +203,16 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `Super + Shift + Space` | 切换当前窗口浮动 |
 | `Super + Shift + f` | 全屏 |
 
+平铺布局把屏幕分成两块：左侧的**主区（master）**和右侧的**栈区（stack）**。
+新窗口进入主区，原有窗口依次被挤到栈区。
+
 ### 窗口与主区
 
 | 快捷键 | 功能 |
 | --- | --- |
-| `Super + j` / `k` | 焦点移到下一个 / 上一个窗口 |
+| `Super + j` / `k` | 焦点移到下一个 / 上一个窗口（平铺下按顺时针 / 逆时针） |
 | `Super + Shift + j` / `k` | 调整窗口在栈中的顺序 |
-| `Super + i` / `d` | 主区窗口数 +1 / −1 |
+| `Super + i` / `d` | 主区窗口数 +1 / −1（窗口在主区与栈区之间自动流转） |
 | `Super + h` / `l` | 主区宽度 −5% / +5% |
 
 ### 间隙
@@ -209,6 +229,9 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 
 ### 标签（桌面）
 
+标签（tag）类似虚拟桌面，但比虚拟桌面灵活：**一个窗口可以同时属于多个标签**，
+也可以一次查看所有标签的窗口。
+
 | 快捷键 | 功能 |
 | --- | --- |
 | `Super + 1..9` | 切换到标签 1..9 |
@@ -216,12 +239,20 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `Super + Shift + 1..9` | 把当前窗口移动到标签 n |
 | `Super + Ctrl + Shift + 1..9` | 切换当前窗口的标签 n |
 
+> `Super + Ctrl + 1..9` 只有在「一次查看多个标签」时才有意义：
+> 它把某个标签的所有窗口从当前视图中加进来或移出去。
+> `Super + Tab` 则在当前视图与上一个视图之间来回切换。
+> 上游默认的 `Alt + 0`（查看全部标签）和 `Alt + Shift + 0`（把窗口放到全部标签）
+> 在本配置中被间隙功能占用，见 FAQ。
+
 ### 多显示器
 
 | 快捷键 | 功能 |
 | --- | --- |
 | `Super + ,` / `.` | 聚焦上 / 下一个显示器 |
 | `Super + Shift + ,` / `.` | 把当前窗口移到上 / 下一个显示器 |
+
+> 只有两台显示器时，`上 / 下` 记住其中一个方向就够了；三个以上才有必要两个都记。
 
 ### 鼠标
 
@@ -236,6 +267,44 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | 左键点击窗口标题 | 切换到上一个窗口 |
 | 中键点击窗口标题 | 放大为主窗口 |
 | 中键点击状态栏 | 打开终端 |
+
+> `Super + 左键拖动` 拖动平铺窗口时会自动让它浮动（其余窗口仍保持平铺）；
+> `Super + 中键` 只切换**当前窗口**的浮动状态，不改变整体布局。
+
+### 与上游默认键位对照
+
+上游 dwm 默认使用 `Mod1`（Alt），本配置改用 `Super` 并调整了部分绑定。
+下表左列是常见操作，方便从其他 dwm 配置迁移过来：
+
+| 操作 | 上游默认 | 本配置 |
+| --- | --- | --- |
+| 打开终端 | `Alt + Shift + Enter`（st） | `Super + q`（kitty） |
+| 应用启动器 | `Alt + p`（dmenu） | `Super + r`（rofi） |
+| 暂存终端 | — | ``Super + ` `` |
+| 平铺 / 浮动 / 单窗口布局 | `Alt + t` / `f` / `m` | 同上游 |
+| 循环布局 | `Alt + Space` | 同上游 |
+| 切换当前窗口浮动 | `Alt + Shift + Space` | 同上游 |
+| 焦点下一个 / 上一个窗口 | `Alt + j` / `k` | 同上游 |
+| 主区窗口数 +1 / −1 | `Alt + i` / `d` | 同上游 |
+| 主区宽度 +5% / −5% | `Alt + l` / `h` | 同上游 |
+| 窗口在主区 / 栈区间切换（zoom） | `Alt + Enter` | 同上游 |
+| 关闭窗口 | `Alt + Shift + c` | 同上游 |
+| 退出 dwm | `Alt + Shift + q` | 同上游 |
+| 显示 / 隐藏状态栏 | `Alt + b` | 同上游 |
+| 查看标签 1..9 | `Alt + 1..9` | 同上游（Alt → Super） |
+| 把窗口移到标签 n | `Alt + Shift + 1..9` | 同上游（Alt → Super） |
+| 追加 / 移除标签 n | `Alt + Ctrl + 1..9` | 同上游（Alt → Super） |
+| 切换当前窗口的标签 n | `Alt + Ctrl + Shift + 1..9` | 同上游（Alt → Super） |
+| 当前视图 ↔ 上一个视图 | `Alt + Tab` | 同上游（Alt → Super） |
+| 查看全部标签 | `Alt + 0` | ❌ 被 `Super + 0`（间隙开关）占用 |
+| 把窗口放到全部标签 | `Alt + Shift + 0` | ❌ 被 `Super + Shift + 0`（恢复默认间隙）占用 |
+| 聚焦上 / 下一个显示器 | `Alt + ,` / `.` | 同上游（Alt → Super） |
+| 把窗口送到上 / 下一个显示器 | `Alt + Shift + ,` / `.` | 同上游（Alt → Super） |
+| 鼠标移动 / 切换浮动 / 缩放窗口 | `Alt + 左键 / 中键 / 右键` | 同上游（Alt → Super） |
+| 窗口间距（vanitygaps） | — 上游没有 | `Super + y/o`、`Super + Ctrl/Shift + y/o`、`Super + Ctrl/Shift + h/l` |
+| 调整栈内顺序（rotatestack） | — 上游没有 | `Super + Shift + j` / `k` |
+| 窗口全屏（fullscreen） | — 上游没有 | `Super + Shift + f` |
+| 音量 / 亮度 | — 上游没有 | `XF86` 多媒体键，或 `Super + =` / `-` |
 
 ---
 
@@ -278,7 +347,8 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 > pkill -RTMIN+11 dwmblocks
 > ```
 >
-> 本配置已在 `config.h` 中把音量 / 亮度调节绑定到 `XF86Audio*` 键并在按键后自动发送该信号。
+> 本配置已在 `config.h` 中把音量 / 亮度绑定到 `XF86` 多媒体键（备用 `Super + =` / `-`），
+> 并在每次调节后自动发送该信号，见「音量 / 亮度」。
 > 若你新增了 `interval = 0` 的模块，记得同步处理。
 
 ### autostart.sh
@@ -339,11 +409,18 @@ GLFW_IM_MODULE=ibus
 ## ❓ 常见问题
 
 **Q：状态栏的音量 / 亮度一直空白？**
-它们的 `interval` 为 0，只在收到信号时刷新，见上文「状态栏信号」。
+它们的 `interval` 为 0，只在收到信号时刷新。用上文「音量 / 亮度」里的快捷键调节会自动刷新；
+手动改音量（如直接敲 `amixer` / `pactl`）后需要补一条 `pkill -RTMIN+11 dwmblocks`。
+
+**Q：键盘上没有 XF86 多媒体键，怎么调音量？**
+用 `Super + =` / `Super + -`；也可以在 `config.h` 里把 `XF86XK_*` 换成自己喜欢的键位后重新编译。
 
 **Q：`Super + 0` 想用来「查看全部标签」，但实际是切换间隙？**
-两条绑定都用 `Super + 0`，数组里靠前的 `togglegaps` 先匹配，`view ~0` 与 `tag ~0` 失效。
-把 `config.h` 中靠前的那两条注释掉即可恢复。
+`Super + 0` 与 `Super + Shift + 0` 都被间隙功能占用（`togglegaps` / `defaultgaps` 在
+`keys[]` 数组里更靠前，优先匹配），因此上游默认的 `view ~0`（查看全部标签）与
+`tag ~0`（把窗口放到全部标签）在本配置中失效。
+想用回原来的功能，把 `config.h` 里靠前的那两条注释掉再重新编译即可，
+详见「与上游默认键位对照」。
 
 **Q：`Super + h` 不会调整间隙？**
 `MODKEY|Mod4Mask` 在 `MODKEY = Mod4Mask` 时等于 `MODKEY`，与 `setmfact` 冲突，
