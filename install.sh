@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 #
-# dwm + dwmblocks 一键安装脚本（Arch Linux）
+# dwm + dwmblocks 一键安装脚本（Arch Linux / Debian / Ubuntu）
 #
 #   编译安装 dwm / dwmblocks → 部署自启脚本与状态栏脚本
 #   → 安装 XSession 会话文件 → 配置 fcitx5 + 雾凇拼音
+#
+# 支持发行版：
+#   - Arch 系：pacman + yay/paru（AUR 提供雾凇拼音与 Maple Mono 字体）
+#   - Debian / Ubuntu 系：apt（雾凇拼音与字体改从上游 GitHub 发布包下载）
 #
 # 用法：./install.sh --help
 #
@@ -11,6 +15,7 @@
 #   - 幂等：重复执行不会产生重复内容，改动过的文件会先备份再覆盖
 #   - 安全：默认只写用户级配置，不碰 /etc（除非显式 --system-env）
 #   - 可预览：--dry-run 只打印不执行
+#   - 可降级：可选依赖（字体 / 雾凇拼音 / AUR）失败只告警，不中断安装
 #
 set -Eeuo pipefail
 
@@ -36,13 +41,33 @@ VERSION="unknown"
 [[ -r "${SRC_DIR}/config.mk" ]] \
 	&& VERSION="$(sed -n 's/^VERSION[[:space:]]*=[[:space:]]*//p' "${SRC_DIR}/config.mk" | head -n1)"
 
-# 构建依赖 / 运行依赖（官方仓库）
-PKGS_BUILD=(base-devel libx11 libxinerama libxft freetype2 fontconfig libxrender)
-PKGS_RUNTIME=(kitty rofi feh picom dunst)
-PKGS_SCRIPT=(brightnessctl alsa-utils iproute2 gawk)
-PKGS_IME=(fcitx5-im fcitx5-rime)
+# 发行版家族，在 preflight 的 detect_distro() 中确定：arch | debian | unknown
+DISTRO_FAMILY="unknown"
+DISTRO_NAME="unknown"
+
+# ---- 依赖清单：Arch 系（官方仓库） ----
+PKGS_BUILD_ARCH=(base-devel libx11 libxinerama libxft freetype2 fontconfig libxrender)
+PKGS_RUNTIME_ARCH=(kitty rofi feh picom dunst)
+PKGS_SCRIPT_ARCH=(brightnessctl alsa-utils iproute2 gawk unzip curl)
+PKGS_IME_ARCH=(fcitx5-im fcitx5-rime)
 # AUR（安装失败不中断）
-PKGS_AUR=(rime-ice-git maplemono-cn)
+PKGS_AUR_RIME_ARCH=(rime-ice-git)
+PKGS_AUR_FONT_ARCH=(maplemono-cn)
+
+# ---- 依赖清单：Debian / Ubuntu 系（apt） ----
+# 注意：Debian 系没有 fcitx5-im / rime-ice-git / maplemono-cn 这类元包或 AUR 包，
+#       输入法拆成多个包，雾凇拼音与字体改为从上游 GitHub 发布包下载。
+PKGS_BUILD_DEB=(build-essential libx11-dev libxinerama-dev libxft-dev
+	libfreetype6-dev libfontconfig1-dev libxrender-dev)
+PKGS_RUNTIME_DEB=(kitty rofi feh picom dunst)
+PKGS_SCRIPT_DEB=(brightnessctl alsa-utils iproute2 gawk unzip curl)
+PKGS_IME_DEB=(fcitx5 fcitx5-chinese-addons fcitx5-rime fcitx5-config-qt
+	fcitx5-frontend-gtk2 fcitx5-frontend-gtk3 fcitx5-frontend-qt5)
+
+# ---- 上游资源（Debian / Ubuntu 无 AUR，改为直接下载） ----
+RIME_ICE_URL="https://github.com/iDvel/rime-ice/releases/download/nightly/full.zip"
+MAPLE_FONT_URL="https://github.com/subframe7536/maple-font/releases/latest/download/MapleMono-NF-CN.zip"
+FONT_DIR="${HOME}/.local/share/fonts/MapleMono-CN"
 
 # --------------------------------------------------------------------------- #
 # 参数
@@ -54,6 +79,7 @@ WITH_DEPS=true
 WITH_DWM=true
 WITH_DWMBLOCKS=true
 WITH_IME=true
+WITH_FONT=true
 WITH_EXTRAS=false
 USE_SYSTEM_ENV=false
 DO_UNINSTALL=false
@@ -89,16 +115,22 @@ ${C_BOLD}用法${C_RESET}
 ${C_BOLD}选项${C_RESET}
   -n, --dry-run            只打印将要执行的命令，不做任何修改
   -y, --yes                所有询问自动回答 yes
-      --no-deps            跳过依赖安装
+      --no-deps            跳过依赖安装（含字体 / 雾凇拼音下载）
       --no-dwm             跳过 dwm 编译安装
       --no-dwmblocks       跳过 dwmblocks 编译安装
       --extras             额外部署 extras/ 到 ~/.config/（Hyprland / Waybar / Kitty / Rofi）
       --no-ime             跳过 fcitx5 / 雾凇拼音配置
+      --no-font            跳过 Maple Mono CN 字体安装
       --system-env         输入法环境变量写入 /etc/environment（需 root，影响全局）
       --prefix DIR         安装前缀（默认 ${PREFIX}）
       --autostart-dir DIR  自启脚本部署目录（默认 ~/.dwm）
       --uninstall          卸载 dwm / dwmblocks / 会话文件 / 自启目录
   -h, --help               显示本帮助
+
+${C_BOLD}发行版支持${C_RESET}
+  - Arch 系：pacman + yay/paru（雾凇拼音、Maple Mono CN 走 AUR）
+  - Debian / Ubuntu 系：apt，雾凇拼音与字体从上游 GitHub 发布包下载
+  - 其它发行版：加 --no-deps 跳过依赖步骤，自行准备编译工具链
 
 ${C_BOLD}示例${C_RESET}
   ./${SCRIPT_NAME} --dry-run          # 先看看会做什么
@@ -121,6 +153,7 @@ parse_args() {
 			--no-dwmblocks)     WITH_DWMBLOCKS=false ;;
 			--extras)           WITH_EXTRAS=true ;;
 			--no-ime)           WITH_IME=false ;;
+			--no-font)          WITH_FONT=false ;;
 			--system-env)       USE_SYSTEM_ENV=true ;;
 			--prefix)           PREFIX="${2:?--prefix 需要一个参数}"; MANPREFIX="${PREFIX}/share/man"; shift ;;
 			--autostart-dir)    AUTOSTART_DIR="${2:?--autostart-dir 需要一个参数}"; shift ;;
@@ -225,23 +258,78 @@ install_file() {
 # 步骤 1：环境检查
 # --------------------------------------------------------------------------- #
 
+# 探测发行版家族，并据此调整平台相关路径
+detect_distro() {
+	local id="" like="" info=""
+
+	if [[ -r /etc/os-release ]]; then
+		# 在子 shell 中解析：os-release 里的 VERSION 会覆盖本脚本的同名变量
+		info="$(. /etc/os-release >/dev/null 2>&1;
+			printf '%s|%s|%s' "${ID:-}" "${ID_LIKE:-}" "${PRETTY_NAME:-unknown}")"
+		IFS='|' read -r id like DISTRO_NAME <<<"$info"
+	fi
+
+	if have pacman && [[ "$id" == "arch" || "$like" == *arch* ]]; then
+		DISTRO_FAMILY=arch
+	elif have apt-get \
+		&& [[ "$id" == "debian" || "$id" == "ubuntu" || "$like" == *debian* || "$like" == *ubuntu* ]]; then
+		DISTRO_FAMILY=debian
+	elif [[ -z "$DISTRO_NAME" || "$DISTRO_NAME" == "unknown" ]]; then
+		# 没有 /etc/os-release 时退化为「按包管理器猜」
+		if have pacman; then
+			DISTRO_FAMILY=arch
+		elif have apt-get; then
+			DISTRO_FAMILY=debian
+		fi
+	fi
+
+	# Debian / Ubuntu 的 X11 会话由 /etc/X11/Xsession 读取 ~/.xsessionrc，
+	# 而 Arch 系习惯用 ~/.xprofile（startx / LightDM）。
+	if [[ "$DISTRO_FAMILY" == "debian" ]]; then
+		XPROFILE="${HOME}/.xsessionrc"
+	fi
+}
+
+require_build_tools() {
+	if [[ $DRY_RUN == true ]]; then
+		log "[dry-run] 跳过编译工具检查"
+		return 0
+	fi
+
+	local missing=()
+	have make || missing+=(make)
+	{ have cc || have gcc; } || missing+=(cc)
+
+	if [[ ${#missing[@]} -gt 0 ]]; then
+		die "缺少编译工具：${missing[*]}（Arch: base-devel；Debian/Ubuntu: build-essential）"
+	fi
+}
+
 preflight() {
 	step "环境检查"
 
 	[[ -f "${SRC_DIR}/dwm.c" && -f "${SRC_DIR}/Makefile" ]] \
 		|| die "源码目录不完整：${SRC_DIR}（请在仓库根目录运行本脚本）"
 
-	have make || die "未找到 make，请先安装 base-devel"
-	have cc || have gcc || die "未找到 C 编译器，请先安装 base-devel"
+	detect_distro
+	log "系统：${DISTRO_NAME}"
+	case "$DISTRO_FAMILY" in
+		arch)   ok "识别为 Arch 系发行版（pacman + AUR helper）" ;;
+		debian) ok "识别为 Debian / Ubuntu 系发行版（apt）" ;;
+		*)      warn "未识别的发行版，依赖安装步骤将被跳过（可显式加 --no-deps 消除本提示）" ;;
+	esac
 
-	if [[ -r /etc/os-release ]]; then
-		# shellcheck disable=SC1091
-		. /etc/os-release
-		log "系统：${PRETTY_NAME:-unknown}"
-		[[ "${ID:-}" == "arch" || "${ID_LIKE:-}" == *arch* ]] \
-			|| warn "非 Arch 系发行版，依赖安装步骤可能不适用（可加 --no-deps 跳过）"
+	# 工具链缺失时先交给依赖步骤补齐；只有明确跳过依赖安装才立即报错
+	if [[ $WITH_DEPS == false ]]; then
+		require_build_tools
 	else
-		warn "无法识别发行版（缺少 /etc/os-release）"
+		local t
+		for t in make cc gcc; do
+			have "$t" || {
+				warn "未找到 ${t}，将由依赖安装步骤补齐"
+				break
+			}
+		done
 	fi
 
 	log "仓库：${REPO_DIR}"
@@ -262,46 +350,212 @@ aur_helper() {
 	fi
 }
 
-install_deps() {
-	step "安装依赖"
-
-	if ! have pacman; then
-		warn "未找到 pacman，跳过依赖安装"
+# AUR 安装（Arch 专用）。可选包失败不中断整体安装。
+aur_install() {
+	local pkgs=("$@") helper args
+	helper="$(aur_helper)"
+	if [[ -z "$helper" ]]; then
+		warn "未找到 yay / paru，跳过 AUR 包：${pkgs[*]}"
+		warn "可稍后手动安装，或改用 sudo pacman -S 对应的官方包"
 		return 0
 	fi
 
+	args=(-S --needed)
+	if [[ $ASSUME_YES == true ]]; then
+		args+=(--noconfirm)
+	elif [[ "$helper" == "yay" ]]; then
+		# 避免 yay 交互式询问 cleanBuild / diff
+		args+=(--answerclean None --answerdiff None --answeredit None)
+	fi
+
+	log "AUR（${helper}）：${pkgs[*]}"
+	run "$helper" "${args[@]}" "${pkgs[@]}" \
+		|| warn "AUR 包安装失败，可稍后手动执行：${helper} -S ${pkgs[*]}"
+}
+
+# 下载工具：优先 curl，回退 wget
+download() {
+	local url="$1" dest="$2"
+	if have curl; then
+		run curl -fL --retry 3 --connect-timeout 15 -o "$dest" "$url"
+	elif have wget; then
+		run wget -q --tries=3 --timeout=15 -O "$dest" "$url"
+	else
+		warn "未找到 curl / wget，无法下载 ${url}"
+		return 1
+	fi
+}
+
+install_deps_arch() {
 	local pacman_args=(-S --needed)
 	[[ $ASSUME_YES == true ]] && pacman_args+=(--noconfirm)
 
-	log "官方仓库：${PKGS_BUILD[*]} ${PKGS_RUNTIME[*]} ${PKGS_SCRIPT[*]} ${PKGS_IME[*]}"
-	as_root pacman "${pacman_args[@]}" "${PKGS_BUILD[@]}" "${PKGS_RUNTIME[@]}" "${PKGS_SCRIPT[@]}" "${PKGS_IME[@]}"
+	log "pacman：$*"
+	as_root pacman "${pacman_args[@]}" "$@"
+}
 
-	if [[ $WITH_IME == false ]]; then
-		log "已指定 --no-ime，跳过 AUR 输入法方案"
-		ok "依赖处理完成"
+install_deps_deb() {
+	if [[ $DRY_RUN == true ]]; then
+		printf '%s  [dry-run]%s sudo apt-get update\n' "$C_CYAN" "$C_RESET"
+		printf '%s  [dry-run]%s sudo apt-get install -y %s\n' "$C_CYAN" "$C_RESET" "$*"
 		return 0
 	fi
 
-	local helper
-	helper="$(aur_helper)"
-	if [[ -z "$helper" ]]; then
-		warn "未找到 yay / paru，跳过 AUR 包：${PKGS_AUR[*]}"
-		ok "依赖处理完成"
+	# 先刷新索引，否则全新系统上 apt-cache 查不到任何包
+	as_root apt-get update
+
+	# 逐个过滤：部分包在旧版 Ubuntu 上不存在，跳过而不是让整批安装失败
+	local available=() p
+	for p in "$@"; do
+		if apt-cache show "$p" >/dev/null 2>&1; then
+			available+=("$p")
+		else
+			warn "软件源中没有该包，已跳过：${p}"
+		fi
+	done
+
+	if [[ ${#available[@]} -eq 0 ]]; then
+		warn "没有可安装的软件包"
 		return 0
 	fi
 
-	log "AUR（${helper}）：${PKGS_AUR[*]}"
-	local aur_args=(-S --needed)
-	if [[ $ASSUME_YES == true ]]; then
-		aur_args+=(--noconfirm)
-	elif [[ "$helper" == "yay" ]]; then
-		# 避免 yay 交互式询问 cleanBuild / diff
-		aur_args+=(--answerclean None --answerdiff None --answeredit None)
+	local apt_args=(-y)
+	[[ $ASSUME_YES == true ]] && apt_args+=(--assume-yes)
+
+	log "apt：${available[*]}"
+
+	# DEBIAN_FRONTEND 避免 tzdata 等包的交互式提问
+	as_root env DEBIAN_FRONTEND=noninteractive \
+		apt-get install "${apt_args[@]}" "${available[@]}"
+}
+
+# ---- 可选上游资源：雾凇拼音 ----
+install_rime_ice() {
+	step "配置雾凇拼音（rime-ice）"
+
+	if [[ "$DISTRO_FAMILY" == "arch" ]]; then
+		aur_install "${PKGS_AUR_RIME_ARCH[@]}"
+		log "提示：rime-ice-git 安装到系统目录，无需再手工下载"
+		return 0
 	fi
 
-	# AUR 包失败不中断安装（字体 / 方案缺失只影响显示效果）
-	run "$helper" "${aur_args[@]}" "${PKGS_AUR[@]}" \
-		|| warn "AUR 包安装失败，可稍后手动执行：${helper} -S ${PKGS_AUR[*]}"
+	if [[ -e "${RIME_DIR}/rime_ice.schema.yaml" ]]; then
+		ok "雾凇拼音已存在于 ${RIME_DIR}，跳过"
+		return 0
+	fi
+
+	if ! have unzip; then
+		warn "未找到 unzip，跳过雾凇拼音（Arch: sudo pacman -S unzip；Ubuntu: sudo apt install unzip）"
+		return 0
+	fi
+
+	if [[ $DRY_RUN == true ]]; then
+		printf '%s  [dry-run]%s 下载并解压 %s → %s\n' \
+			"$C_CYAN" "$C_RESET" "$RIME_ICE_URL" "$RIME_DIR"
+		return 0
+	fi
+
+	run mkdir -p "${RIME_DIR}"
+	local tmp
+	tmp="$(mktemp -d)"
+
+	if download "$RIME_ICE_URL" "${tmp}/rime-ice.zip" \
+		&& unzip -oq "${tmp}/rime-ice.zip" -d "${RIME_DIR}"; then
+		ok "雾凇拼音已部署 → ${RIME_DIR}"
+	else
+		warn "雾凇拼音下载 / 解压失败，可稍后手动处理：${RIME_ICE_URL}"
+	fi
+
+	rm -rf -- "$tmp"
+}
+
+# ---- 可选上游资源：Maple Mono CN 字体（Nerd Font，状态栏图标依赖） ----
+install_font() {
+	step "安装 Maple Mono CN 字体"
+
+	# 注意：不要写成 "fc-list | grep -q"，grep -q 命中后会提前退出，
+	# 使 fc-list 收到 SIGPIPE，在 pipefail 下整条管道被判为失败。
+	local font_installed=false
+	if [[ -d "$FONT_DIR" ]]; then
+		font_installed=true
+	elif have fc-list; then
+		local fonts
+		fonts="$(fc-list 2>/dev/null || true)"
+		[[ "$fonts" == *"Maple Mono CN"* ]] && font_installed=true
+	fi
+
+	if [[ $font_installed == true ]]; then
+		ok "系统中已存在 Maple Mono CN，跳过"
+		return 0
+	fi
+
+	if [[ "$DISTRO_FAMILY" == "arch" ]]; then
+		aur_install "${PKGS_AUR_FONT_ARCH[@]}"
+		return 0
+	fi
+
+	if ! have unzip; then
+		warn "未找到 unzip，跳过字体安装（状态栏图标可能显示为方块）"
+		return 0
+	fi
+
+	if [[ $DRY_RUN == true ]]; then
+		printf '%s  [dry-run]%s 下载并解压 %s → %s\n' \
+			"$C_CYAN" "$C_RESET" "$MAPLE_FONT_URL" "$FONT_DIR"
+		return 0
+	fi
+
+	local tmp
+	tmp="$(mktemp -d)"
+
+	if download "$MAPLE_FONT_URL" "${tmp}/maple.zip" \
+		&& unzip -oq "${tmp}/maple.zip" -d "${tmp}/font"; then
+		run mkdir -p "$FONT_DIR"
+		find "${tmp}/font" -type f \( -iname '*.ttf' -o -iname '*.otf' \) \
+			-exec install -m644 {} "$FONT_DIR"/ \;
+		have fc-cache && fc-cache -f "$FONT_DIR" >/dev/null 2>&1
+		ok "字体已安装 → ${FONT_DIR}（若状态栏仍乱码可重新登录）"
+	else
+		warn "字体下载 / 解压失败，状态栏图标可能显示为方块"
+		warn "可手动下载后解压到 ${FONT_DIR}：${MAPLE_FONT_URL}"
+	fi
+
+	rm -rf -- "$tmp"
+}
+
+install_deps() {
+	step "安装依赖"
+
+	local pkgs=()
+	case "$DISTRO_FAMILY" in
+		arch)
+			pkgs=("${PKGS_BUILD_ARCH[@]}" "${PKGS_RUNTIME_ARCH[@]}" "${PKGS_SCRIPT_ARCH[@]}")
+			[[ $WITH_IME == true ]] && pkgs+=("${PKGS_IME_ARCH[@]}")
+			install_deps_arch "${pkgs[@]}"
+			;;
+		debian)
+			pkgs=("${PKGS_BUILD_DEB[@]}" "${PKGS_RUNTIME_DEB[@]}" "${PKGS_SCRIPT_DEB[@]}")
+			[[ $WITH_IME == true ]] && pkgs+=("${PKGS_IME_DEB[@]}")
+			install_deps_deb "${pkgs[@]}"
+			;;
+		*)
+			warn "未识别的发行版，跳过依赖安装"
+			warn "请自行准备：make / C 编译器 / libX11 / libXinerama / libXft / libXrender 开发包"
+			return 0
+			;;
+	esac
+
+	if [[ $WITH_IME == true ]]; then
+		install_rime_ice
+	else
+		log "已指定 --no-ime，跳过 fcitx5 相关包与雾凇拼音"
+	fi
+
+	if [[ $WITH_FONT == true ]]; then
+		install_font
+	else
+		log "已指定 --no-font，跳过字体安装"
+	fi
 
 	ok "依赖处理完成"
 }
@@ -553,6 +807,8 @@ do_uninstall() {
 	log "${XPROFILE} 中 'dwm install.sh: ime' 标记之间的内容"
 	log "/etc/environment 中 'dwm install.sh: ime' 标记之间的内容（若用过 --system-env）"
 	log "${RIME_DIR}/default.custom.yaml（Rime 方案配置）"
+	log "${RIME_DIR}/（若由本脚本下载过雾凇拼音，整个目录都是本脚本产生的）"
+	log "${FONT_DIR}（若由本脚本下载过 Maple Mono CN 字体）"
 	log "~/.config/{hypr,waybar,kitty,rofi}（若用过 --extras）"
 
 	step "卸载完成"
@@ -579,6 +835,9 @@ main() {
 	if [[ $WITH_DEPS == true ]]; then
 		install_deps
 	fi
+	if [[ $WITH_DWM == true || $WITH_DWMBLOCKS == true ]]; then
+		require_build_tools
+	fi
 	if [[ $WITH_DWM == true ]]; then
 		build_dwm
 	fi
@@ -602,6 +861,7 @@ main() {
 
 下一步：
   1. 注销并重新登录，在登录界面选择 "Dwm" 会话
+     （Ubuntu 的 GDM 登录界面点用户名后，右下角齿轮里选 Dwm）
   2. 首次启动后确认状态栏正常：pkill -RTMIN+11 dwmblocks 可手动刷新音量/亮度
   3. 修改 src/config.h 或 dwmblocks/blocks.h 后需重新执行 ./${SCRIPT_NAME}
      （或手动 make -C src / make -C dwmblocks）
