@@ -1,19 +1,22 @@
-# dwm — 我的 Arch Linux 桌面配置
+# dwm — 我的 dwm 桌面配置（Arch Linux / Ubuntu）
 
 基于 [dwm 6.4](https://dwm.suckless.org/) 的个人桌面环境配置，包含窗口管理器源码、状态栏程序、
 自启脚本、状态栏脚本，以及一套附赠的 Hyprland / Waybar / Kitty / Rofi 配置。
 
-提供 `install.sh` 一键完成「装依赖 → 编译 → 安装 → 部署配置 → 配置输入法」。
+提供 `install.sh` 一键完成「装依赖 → 编译 → 安装 → 部署配置 → 配置输入法」，
+自动识别 **Arch 系** 与 **Debian / Ubuntu 系** 发行版。
 
-![预览](dwm.png)
+![dwm](dwm.png)
 
 ---
 
 ## ✨ 特性
 
-- **dwm 6.4** 深度定制：圆角间距、托盘透明、暂存窗口、全屏、独立桌面布局记忆
+- **dwm 6.4** 深度定制：窗口间隙（vanitygaps）、状态栏半透明 + 系统托盘、暂存窗口、
+  全屏、每个标签独立记忆布局参数（pertag）
 - **dwmblocks** 状态栏：网速 / CPU / 内存 / 音量 / 亮度 / 电量 / 时间
 - **一键安装脚本** `install.sh`：幂等、支持 `--dry-run`、支持 `--uninstall`
+- **跨发行版**：自动区分 `pacman` / `apt`，Ubuntu 上自动补齐拆分后的 fcitx5 包
 - **fcitx5 + 雾凇拼音** 自动配置（含环境变量）
 - 附赠 **Hyprland** 完整配置（`extras/`），与 dwm 共存互不影响
 
@@ -42,10 +45,11 @@ dwm/
 │       ├── wlan.sh  cpu.sh  memory.sh  volume.sh
 │       └── backlight.sh  battery.sh  date.sh
 ├── extras/                   # 附赠配置（Hyprland / Waybar / Kitty / Rofi）
-├── patches/                  # 补丁存档与说明
+├── patches/                  # 补丁存档与说明（见 patches/README.md）
 ├── dwm.desktop               # XSession 会话文件（安装到 /usr/share/xsessions）
-├── dwm.png                   # README 预览图
+├── dwm.png                   # dwm 图标（README 顶部图片）
 ├── install.sh                # ★ 唯一安装入口
+├── .gitignore                # 忽略编译产物与 install.sh 生成的 *.bak.*
 ├── LICENSE
 └── README.md
 ```
@@ -64,31 +68,36 @@ dwm/
 
 ## 📦 依赖
 
+`install.sh` 会按发行版自动选择下面的包名，你也可以对照手动安装。
+
 ### 构建依赖
 
-| 包 | 用途 |
-| --- | --- |
-| `base-devel` | gcc / make |
-| `libx11` `libxinerama` `libxrender` | X11 基础库（Xinerama 多显示器） |
-| `libxft` `freetype2` `fontconfig` | 字体渲染 |
+| 用途 | Arch | Debian / Ubuntu |
+| --- | --- | --- |
+| gcc / make | `base-devel` | `build-essential` |
+| X11 基础库（含 Xinerama 多显示器） | `libx11` `libxinerama` `libxrender` | `libx11-dev` `libxinerama-dev` `libxrender-dev` |
+| 字体渲染 | `libxft` `freetype2` `fontconfig` | `libxft-dev` `libfreetype6-dev` `libfontconfig1-dev` |
 
 ### 运行依赖
 
-| 包 | 用途 | 是否必需 |
-| --- | --- | --- |
-| `kitty` | 终端（`config.h` 中 `termcmd`） | 必需 |
-| `rofi` | 应用启动器（`Super + r`） | 必需 |
-| `feh` | 设置壁纸 | `scripts/autostart.sh` |
-| `picom` | 窗口合成器（透明 / 阴影） | `scripts/autostart.sh` |
-| `dunst` | 通知守护进程 | `scripts/autostart.sh` |
-| `fcitx5-im` `fcitx5-rime` | 输入法 | 可选 |
-| `rime-ice-git`（AUR） | 雾凇拼音方案 | 可选 |
-| `maplemono-cn`（AUR） | 界面字体 `Maple Mono CN` | 可选 |
-| `brightnessctl` | 屏幕亮度（回退 `xbacklight` → `/sys`） | 可选 |
-| `alsa-utils` 或 `pipewire-pulse` | 音量（优先 `pactl`，回退 `amixer`） | 可选 |
-| `iproute2` `awk` | 网速模块 | 可选 |
+| 包 | 用途 | 是否必需 | Debian / Ubuntu |
+| --- | --- | --- | --- |
+| `kitty` | 终端（`config.h` 中 `termcmd`） | 必需 | 同名 |
+| `rofi` | 应用启动器（`Super + r`） | 必需 | 同名 |
+| `feh` | 设置壁纸 | `scripts/autostart.sh` | 同名 |
+| `picom` | 窗口合成器（透明 / 阴影） | `scripts/autostart.sh` | 同名 |
+| `dunst` | 通知守护进程 | `scripts/autostart.sh` | 同名 |
+| `fcitx5-im` `fcitx5-rime` | 输入法 | 可选 | `fcitx5` `fcitx5-rime` `fcitx5-chinese-addons` `fcitx5-config-qt` `fcitx5-frontend-*` |
+| `rime-ice-git` | 雾凇拼音方案 | 可选 | 无对应包，脚本从 [上游 release](https://github.com/iDvel/rime-ice/releases) 下载 |
+| `maplemono-cn` | 界面字体 `Maple Mono CN` | 可选 | 无对应包，脚本从 [上游 release](https://github.com/subframe7536/maple-font/releases) 下载 |
+| `brightnessctl` | 屏幕亮度（回退 `xbacklight` → `/sys`） | 可选 | 同名 |
+| `alsa-utils` 或 `pipewire-pulse` | 音量（优先 `pactl`，回退 `amixer`） | 可选 | 同名 |
+| `iproute2` `awk` | 网速模块 | 可选 | 同名 |
+| `unzip` `curl` | 下载 / 解压上游字体与词库 | 可选 | 同名 |
 
 > 依赖缺失不会让 dwm 起不来，只是对应的状态栏模块显示为空。
+> Ubuntu 上 `picom`、`kitty`、`brightnessctl` 等包在较老版本（如 20.04）可能不存在，
+> 脚本会用 `apt-cache` 逐个过滤，缺哪个就跳过哪个并给出提示，不会中断安装。
 
 ---
 
@@ -102,7 +111,46 @@ cd dwm
 ./install.sh             # 实际安装
 ```
 
-安装完成后**注销并重新登录**，在登录界面（LightDM 等）选择 `Dwm` 会话即可。
+脚本会自动识别发行版：Arch 系走 `pacman` + AUR，Debian / Ubuntu 系走 `apt`。
+
+### 各发行版的注意事项
+
+<details open>
+<summary><b>Debian / Ubuntu</b></summary>
+
+* 建议 **Ubuntu 22.04 及以上**（`fcitx5`、`kitty`、`picom` 等包在 22.04 才齐备）。
+* 需要 sudo 权限，脚本会用 `sudo` 安装包、写入 `/usr/local/bin` 与 `/usr/share/xsessions`。
+* Ubuntu 默认是 **Wayland** 会话，dwm 只能跑在 X11 下：注销后点用户名，
+  在右下角**齿轮**里选择 **Dwm**（或 "Ubuntu on Xorg"）再登录。
+* 输入法环境变量写入的是 `~/.xsessionrc`（Debian 系 `/etc/X11/Xsession` 会读取它），
+  而不是 Arch 常见的 `~/.xprofile`。两者同时存在 `~/.config/environment.d/10-ime.conf`。
+* 雾凇拼音与 `Maple Mono CN` 字体没有打包，脚本会从 GitHub release 下载并安装到用户目录：
+  * `~/.local/share/fcitx5/rime/`（雾凇拼音）
+  * `~/.local/share/fonts/MapleMono-CN/`（字体，装完自动 `fc-cache -f`）
+
+</details>
+
+<details>
+<summary><b>Arch Linux</b></summary>
+
+* 需要 `yay` 或 `paru` 才能装 `rime-ice-git` / `maplemono-cn`；没有 AUR helper 时会跳过这两项。
+* 其余流程与以前一致。
+
+</details>
+
+<details>
+<summary><b>其它发行版</b></summary>
+
+加 `--no-deps` 跳过依赖步骤，自行准备 `make`、C 编译器与 `libX11` / `libXinerama` / `libXft` / `libXrender`
+开发包，然后：
+
+```bash
+./install.sh --no-deps
+```
+
+</details>
+
+安装完成后**注销并重新登录**，在登录界面（GDM / LightDM / SDDM）选择 `Dwm` 会话即可。
 
 ### install.sh 参数
 
@@ -110,11 +158,13 @@ cd dwm
 | --- | --- |
 | `-h, --help` | 显示帮助 |
 | `-n, --dry-run` | 只打印命令，不执行 |
-| `-y, --yes` | 所有询问自动回答 yes |
-| `--no-deps` | 跳过依赖安装 |
-| `--no-ime` | 跳过 fcitx5 / 雾凇拼音配置 |
-| `--extras` | 额外把 `extras/` 部署到 `~/.config/`（Hyprland / Waybar / Kitty / Rofi） |
+| `-y, --yes` | 所有询问自动回答 yes（apt / pacman 全部走非交互） |
+| `--no-deps` | 跳过依赖安装（含字体与雾凇拼音下载） |
+| `--no-dwm` | 不编译安装 dwm 本体（只装状态栏 / 配置） |
 | `--no-dwmblocks` | 不编译安装状态栏 |
+| `--no-ime` | 跳过 fcitx5 安装与雾凇拼音配置 |
+| `--no-font` | 跳过 `Maple Mono CN` 字体安装 |
+| `--extras` | 额外把 `extras/` 部署到 `~/.config/`（Hyprland / Waybar / Kitty / Rofi） |
 | `--system-env` | 把输入法环境变量写入 `/etc/environment`（需 root，影响全局） |
 | `--prefix DIR` | 安装前缀，默认 `/usr/local` |
 | `--autostart-dir DIR` | 自启文件部署目录，默认 `~/.dwm` |
@@ -122,20 +172,25 @@ cd dwm
 
 ### 脚本做了什么
 
-1. 检测系统（Arch 系）并安装缺失依赖
-2. `make -C src` 编译 dwm → `sudo make -C src install`（默认装到 `/usr/local/bin`）
-3. 编译安装 `dwmblocks`
-4. 部署 `scripts/autostart.sh` → `~/.dwm/autostart.sh`、
+1. 检测发行版（Arch 系 / Debian 系 / 其它），选择对应的包管理器与包名
+2. 安装缺失依赖；可选依赖（字体、雾凇拼音）失败只告警不中断
+   - Debian 系上额外从 GitHub 下载 **雾凇拼音**（`rime-ice`）与 **Maple Mono CN** 字体
+3. `make -C src` 编译 dwm → `sudo make -C src install`（默认装到 `/usr/local/bin`）
+4. 编译安装 `dwmblocks`
+5. 部署 `scripts/autostart.sh` → `~/.dwm/autostart.sh`、
    `scripts/statusbar/*.sh` → `~/.dwm/scripts/`，并补齐可执行权限
-5. 安装 `dwm.desktop` 到 `/usr/share/xsessions/`
-6. 写入 fcitx5 环境变量（用户级，见下）并生成 `~/.local/share/fcitx5/rime/default.custom.yaml`
-7. 检查 `~/.dwm` 与 dwm 实际查找路径是否一致（见 FAQ）
+6. 安装 `dwm.desktop` 到 `/usr/share/xsessions/`
+7. 写入 fcitx5 环境变量（用户级，见下）并生成 `~/.local/share/fcitx5/rime/default.custom.yaml`
+8. 检查 `~/.dwm` 与 dwm 实际查找路径是否一致（见 FAQ）
 
 加 `--extras` 时另外把 `extras/<name>/` 复制到 `~/.config/<name>/`（覆盖前自动备份）。
 
 ---
 
 ## 🔧 手动安装
+
+<details open>
+<summary><b>Arch Linux</b></summary>
 
 ```bash
 # 1. 依赖
@@ -156,11 +211,55 @@ install -m755 scripts/statusbar/*.sh ~/.dwm/scripts/
 sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 ```
 
+</details>
+
+<details>
+<summary><b>Debian / Ubuntu</b></summary>
+
+```bash
+# 1. 构建依赖与运行依赖
+sudo apt update
+sudo apt install -y build-essential libx11-dev libxinerama-dev libxft-dev \
+    libfreetype6-dev libfontconfig1-dev libxrender-dev \
+    kitty rofi feh picom dunst brightnessctl alsa-utils iproute2 gawk unzip curl
+
+# 2. 输入法（Ubuntu 上是拆分的多个包）
+sudo apt install -y fcitx5 fcitx5-chinese-addons fcitx5-rime fcitx5-config-qt \
+    fcitx5-frontend-gtk2 fcitx5-frontend-gtk3 fcitx5-frontend-qt5
+
+# 3. 雾凇拼音（无 deb 包，直接装上游发布包）
+mkdir -p ~/.local/share/fcitx5/rime
+curl -fL -o /tmp/rime-ice.zip \
+    https://github.com/iDvel/rime-ice/releases/download/nightly/full.zip
+unzip -oq /tmp/rime-ice.zip -d ~/.local/share/fcitx5/rime
+
+# 4. Maple Mono CN 字体（状态栏图标依赖，同样来自上游发布包）
+mkdir -p ~/.local/share/fonts/MapleMono-CN
+curl -fL -o /tmp/maple.zip \
+    https://github.com/subframe7536/maple-font/releases/latest/download/MapleMono-NF-CN.zip
+unzip -oq /tmp/maple.zip -d /tmp/maple-font
+find /tmp/maple-font -type f \( -iname '*.ttf' -o -iname '*.otf' \) \
+    -exec install -m644 {} ~/.local/share/fonts/MapleMono-CN/ \;
+fc-cache -f
+
+# 5. 编译安装 dwm、状态栏、脚本、会话文件
+make -C src && sudo make -C src install
+make -C dwmblocks && sudo make -C dwmblocks install
+
+mkdir -p ~/.dwm/scripts
+install -m755 scripts/autostart.sh ~/.dwm/autostart.sh
+install -m755 scripts/statusbar/*.sh ~/.dwm/scripts/
+
+sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
+```
+
+</details>
+
 ---
 
 ## 🩹 已应用的补丁
 
-以下补丁可在 `dwm.c` / `config.h` 中直接验证：
+以下补丁已打进 `src/dwm.c`，可在 `dwm.c` / `config.h` 中直接验证：
 
 | 补丁 | 作用 |
 | --- | --- |
@@ -173,7 +272,8 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `rotatestack` | 调整窗口在栈中的顺序 |
 | `autostart` | 启动时执行 `~/.dwm/autostart.sh` |
 
-补丁文件存放于 `patches/`，说明见 [`patches/README.md`](patches/README.md)。
+另有 4 个补丁**未应用**（`hide_vacant_tags`、`noborder`、`accessnthmonitor`、`statuscmd`），
+它们对使用上的具体影响、以及归档的 diff，见 [`patches/README.md`](patches/README.md)。
 
 ---
 
@@ -245,6 +345,11 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `Super + Shift + h` / `l` | 外间隙（整体）+1 / −1 |
 | `Super + 0` | 开关间隙 |
 | `Super + Shift + 0` | 恢复默认间隙 |
+
+> 表中都是**实际生效**的绑定。`config.h` 里还有一组 `Super + Mod4 + y/o`（外间隙水平）与
+> `Super + Mod4 + h/l`（内间隙整体），因为 `MODKEY|Mod4Mask` 在 `MODKEY = Mod4Mask` 时
+> 等于 `MODKEY`，被更靠前的 `setmfact` / `incrihgaps` 遮蔽而失效，详见 FAQ。
+> 因此**外间隙（水平）目前没有可用快捷键**，只能整体调整（`Super + Shift + h/l`）。
 
 ### 标签（桌面）
 
@@ -385,8 +490,20 @@ dwm 启动后会依次执行（见 `dwm.c` 的 `runautostart()`）：
 状态栏图标依赖 Nerd Font 字形，本配置使用 `Maple Mono CN`：
 
 ```bash
+# Arch
 yay -S maplemono-cn
+
+# Debian / Ubuntu：装到用户字体目录
+mkdir -p ~/.local/share/fonts/MapleMono-CN
+curl -fL -o /tmp/maple.zip \
+    https://github.com/subframe7536/maple-font/releases/latest/download/MapleMono-NF-CN.zip
+unzip -oq /tmp/maple.zip -d /tmp/maple-font
+find /tmp/maple-font -type f \( -iname '*.ttf' -o -iname '*.otf' \) \
+    -exec install -m644 {} ~/.local/share/fonts/MapleMono-CN/ \;
+fc-cache -f
 ```
+
+`./install.sh` 会自动完成以上步骤（`--no-font` 可跳过，`--no-deps` 会一起跳过）。
 
 ---
 
@@ -394,12 +511,16 @@ yay -S maplemono-cn
 
 `install.sh` 默认会：
 
-1. 写入 `~/.local/share/fcitx5/rime/default.custom.yaml`（已存在则先备份）
-2. 写入用户级环境变量，X11 与 Wayland 会话都能生效：
+1. 安装 fcitx5；雾凇拼音方案在 Arch 上来自 AUR（`rime-ice-git`），
+   在 Debian / Ubuntu 上从 [上游 release](https://github.com/iDvel/rime-ice/releases) 下载并解压到
+   `~/.local/share/fcitx5/rime/`（`--no-ime` 可整段跳过）
+2. 写入 `~/.local/share/fcitx5/rime/default.custom.yaml`（已存在则先备份）
+3. 写入用户级环境变量，X11 与 Wayland 会话都能生效：
 
 ```bash
-# ~/.config/environment.d/10-ime.conf   （systemd 图形会话）
-# ~/.xprofile                            （startx / X11 会话）
+# ~/.config/environment.d/10-ime.conf   （systemd 图形会话，两个发行版都会写）
+# ~/.xprofile                            （Arch：startx / LightDM 等 X11 会话）
+# ~/.xsessionrc                          （Debian / Ubuntu：/etc/X11/Xsession 会读取）
 GTK_IM_MODULE=fcitx
 QT_IM_MODULE=fcitx
 XMODIFIERS=@im=fcitx
@@ -455,6 +576,16 @@ done
 `/usr/share/xsessions/dwm.desktop`、`~/.dwm`。
 不会删除：输入法配置、字体、以及你自行修改过的 `~/.config`。
 
+下面这些由安装过程产生、但脚本不会自动删除，会打印出来让你自行确认：
+
+| 路径 | 何时产生 |
+| --- | --- |
+| `~/.config/environment.d/10-ime.conf` | 安装输入法时 |
+| `~/.xprofile` / `~/.xsessionrc` 中标记之间的内容 | 安装输入法时 |
+| `~/.local/share/fcitx5/rime/` | Debian / Ubuntu 上下载雾凇拼音时 |
+| `~/.local/share/fonts/MapleMono-CN/` | Debian / Ubuntu 上下载字体时 |
+| `~/.config/{hypr,waybar,kitty,rofi}` | 用过 `--extras` 时 |
+
 ---
 
 ## ❓ 常见问题
@@ -473,9 +604,18 @@ done
 想用回原来的功能，把 `config.h` 里靠前的那两条注释掉再重新编译即可，
 详见「与上游默认键位对照」。
 
-**Q：`Super + h` 不会调整间隙？**
-`MODKEY|Mod4Mask` 在 `MODKEY = Mod4Mask` 时等于 `MODKEY`，与 `setmfact` 冲突，
-所以只有靠前的 `setmfact` 生效。间隙请用 `Super + Ctrl + h/l`、`Super + Shift + h/l` 等组合。
+**Q：`Super + h` 不调整间隙？`config.h` 里有些绑定看着有、实际按了没反应？**
+根因是 `MODKEY|Mod4Mask` 在本配置（`MODKEY = Mod4Mask`）中**等价于 `MODKEY`**，
+于是两条“不同修饰键”的绑定其实争抢同一个键位，`keys[]` 里靠前的那条胜出。
+受影响的组合：
+
+| 绑定 | 被谁遮蔽 | 结果 |
+| --- | --- | --- |
+| `Super + h` / `l` | 靠前的 `setmfact` | 变成调整主区宽度，间隙请用 `Super + Ctrl + h/l`、`Super + Shift + h/l` |
+| `Super + y` / `o` | 靠前的 `incrihgaps` | 变成内间隙（水平），外间隙（水平）暂时无快捷键 |
+| `Super + 0` | 靠前的 `togglegaps` | 变成开关间隙，见上一条 |
+
+想恢复某个功能，把 `config.h` 里更靠前的那条注释掉再重新编译即可。
 
 **Q：开机进了 dwm 但没有壁纸 / 输入法 / 状态栏？**
 1. 确认 `~/.dwm/autostart.sh` 存在且**可执行**（`chmod +x`）
@@ -488,11 +628,34 @@ done
 
 **Q：状态栏图标显示成方块？**
 缺少 `Maple Mono CN` 字体或该字体不含对应 Nerd Font 字形。
+Debian / Ubuntu 上可用 `fc-list | grep -i 'Maple Mono CN'` 确认字体是否装上。
 
-**Q：改了 `c：dwm 需 `make -C src && sudo make -C src install`，
+**Q：改了 `config.h` / `blocks.h` 之后要做什么？**
+两者都是编译期配置：dwm 需 `make -C src && sudo make -C src install`，
 状态栏需 `make -C dwmblocks && sudo make -C dwmblocks install`（或直接 `./install.sh`），
-然后
-两者都是编译期配置，需要重新 `make`（dwm）或 `make -C dwmblocks`，并重新登录。
+然后重新登录。
+
+**Q：Ubuntu 上 `./install.sh` 提示「未识别的发行版」？**
+脚本靠 `/etc/os-release` 里的 `ID` / `ID_LIKE` 加包管理器判断。若被裁剪过，
+用 `--no-deps` 跳过依赖步骤，手动装好编译工具链后再跑一次。
+
+**Q：Ubuntu 上某些包提示「软件源中没有该包，已跳过」？**
+老版本 Ubuntu（如 20.04）没有 `fcitx5` / `kitty` / `picom` 等包。
+脚本会跳过缺失项并继续，其余功能（dwm 本体、状态栏）不受影响。
+需要这些功能就升级到 22.04+ 或自行加 PPA。
+
+**Q：Ubuntu 登录界面看不到 Dwm 会话？**
+1. 确认 `/usr/share/xsessions/dwm.desktop` 存在（`./install.sh` 会装）
+2. GDM 登录界面：点用户名后，右下角齿轮里选 **Dwm**
+3. 确认当前不是纯 Wayland 会话（dwm 是 X11 窗口管理器，不会出现在纯 Wayland 的会话列表里）
+
+**Q：Ubuntu 上输入法环境变量写在哪个文件？**
+Debian 系的 `/etc/X11/Xsession` 读取的是 `~/.xsessionrc`（不是 `~/.xprofile`），
+`install.sh` 已自动按发行版选择，另外还会写 `~/.config/environment.d/10-ime.conf`。
+
+**Q：Ubuntu 上雾凇拼音 / 字体下载失败？**
+需要能访问 GitHub。可稍后手动下载安装，参见「字符字体」与「输入法」两节，
+或用 `--no-ime` / `--no-font` 先跳过。
 
 ---
 

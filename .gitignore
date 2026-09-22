@@ -1,4 +1,7 @@
 .vscode/
+
+# 本地试验用的补丁默认不提交；patches/ 下已归档的两个 diff 是历史提交，
+# 不受本规则影响。若确实要归档新 diff，用 git add -f patches/xxx.diff
 patches/*.diff
 
 # build artifacts
