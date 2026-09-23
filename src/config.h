@@ -84,6 +84,15 @@ static const char *termcmd[]  = { "kitty", NULL};
 static const char scratchpadname[] = "scratchpad";
 static const char *scratchpadcmd[] = { "kitty", "-t", scratchpadname, "-g", "120x34", NULL };
 
+/* 锁屏（Super + Escape）
+ * 与 autostart.sh 里 xss-lock 调用的是同一个脚本，锁屏程序在 lock.sh 里挑选
+ * （LOCKER 环境变量 → betterlockscreen → i3lock → slock）。
+ * 目录查找顺序与 dwm.c 的 runautostart() 一致，只覆盖默认的两个位置。
+ */
+#define LOCK_CMD \
+	"l=\"${XDG_DATA_HOME:-$HOME/.local/share}/dwm/scripts/lock.sh\"; " \
+	"[ -x \"$l\" ] || l=\"$HOME/.dwm/scripts/lock.sh\"; exec \"$l\""
+
 /* 音量 / 亮度
  *   音量：pactl（PipeWire / PulseAudio）→ amixer（ALSA）
  *   亮度：brightnessctl → xbacklight
@@ -102,6 +111,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_r,      spawn,          {.v = roficmd } },
 	{ MODKEY,             			XK_q, 	   spawn,          {.v = termcmd } },
 	{ MODKEY,                       XK_grave,  togglescratch,  {.v = scratchpadcmd } },
+	{ MODKEY,                       XK_Escape, spawn,          SHCMD(LOCK_CMD) },
 	{ MODKEY,                       XK_b,      togglebar,      {0} },
 	{ MODKEY|ShiftMask,             XK_j,      rotatestack,    {.i = +1 } },
 	{ MODKEY|ShiftMask,             XK_k,      rotatestack,    {.i = -1 } },

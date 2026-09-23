@@ -36,6 +36,9 @@ AUTOSTART_DIR="${HOME}/.dwm"
 RIME_DIR="${HOME}/.local/share/fcitx5/rime"
 ENVD_DIR="${HOME}/.config/environment.d"
 XPROFILE="${HOME}/.xprofile"
+# 系统级电源 / 熄屏策略（dconf，仅 --system-env 时写入）
+DCONF_POWER_FILE="/etc/dconf/db/local.d/00-power-settings"
+DCONF_PROFILE="/etc/dconf/profile/user"
 
 VERSION="unknown"
 [[ -r "${SRC_DIR}/config.mk" ]] \
@@ -47,8 +50,8 @@ DISTRO_NAME="unknown"
 
 # ---- 依赖清单：Arch 系（官方仓库） ----
 PKGS_BUILD_ARCH=(base-devel libx11 libxinerama libxft freetype2 fontconfig libxrender)
-PKGS_RUNTIME_ARCH=(kitty rofi feh picom dunst)
-PKGS_SCRIPT_ARCH=(brightnessctl alsa-utils iproute2 gawk unzip curl)
+PKGS_RUNTIME_ARCH=(kitty rofi feh picom dunst xss-lock slock)
+PKGS_SCRIPT_ARCH=(brightnessctl alsa-utils iproute2 gawk unzip curl xorg-xset)
 PKGS_IME_ARCH=(fcitx5-im fcitx5-rime)
 # AUR（安装失败不中断）
 PKGS_AUR_RIME_ARCH=(rime-ice-git)
@@ -59,8 +62,8 @@ PKGS_AUR_FONT_ARCH=(maplemono-cn)
 #       输入法拆成多个包，雾凇拼音与字体改为从上游 GitHub 发布包下载。
 PKGS_BUILD_DEB=(build-essential libx11-dev libxinerama-dev libxft-dev
 	libfreetype6-dev libfontconfig1-dev libxrender-dev)
-PKGS_RUNTIME_DEB=(kitty rofi feh picom dunst)
-PKGS_SCRIPT_DEB=(brightnessctl alsa-utils iproute2 gawk unzip curl)
+PKGS_RUNTIME_DEB=(kitty rofi feh picom dunst xss-lock slock)
+PKGS_SCRIPT_DEB=(brightnessctl alsa-utils iproute2 gawk unzip curl x11-xserver-utils)
 PKGS_IME_DEB=(fcitx5 fcitx5-chinese-addons fcitx5-rime fcitx5-config-qt
 	fcitx5-frontend-gtk2 fcitx5-frontend-gtk3 fcitx5-frontend-qt5)
 
@@ -121,7 +124,10 @@ ${C_BOLD}选项${C_RESET}
       --extras             额外部署 extras/ 到 ~/.config/（Hyprland / Waybar / Kitty / Rofi）
       --no-ime             跳过 fcitx5 / 雾凇拼音配置
       --no-font            跳过 Maple Mono CN 字体安装
-      --system-env         输入法环境变量写入 /etc/environment（需 root，影响全局）
+      --system-env         写入系统级配置（需 root，影响全局）：
+                           /etc/environment 的输入法环境变量
+                           + ${DCONF_POWER_FILE}
+                           电源策略（禁止自动挂起、空闲 15 分钟熄屏）
       --prefix DIR         安装前缀（默认 ${PREFIX}）
       --autostart-dir DIR  自启脚本部署目录（默认 ~/.dwm）
       --uninstall          卸载 dwm / dwmblocks / 会话文件 / 自启目录
@@ -136,6 +142,7 @@ ${C_BOLD}示例${C_RESET}
   ./${SCRIPT_NAME} --dry-run          # 先看看会做什么
   ./${SCRIPT_NAME}                    # 完整安装
   ./${SCRIPT_NAME} --no-deps --no-ime # 只编译安装，不动依赖和输入法
+  ./${SCRIPT_NAME} --system-env       # 额外写入 /etc（输入法环境变量 + 电源策略）
   ./${SCRIPT_NAME} --uninstall        # 卸载
 
 ${C_BOLD}安装后${C_RESET}
@@ -252,6 +259,29 @@ install_file() {
 	fi
 
 	install -Dm"$mode" "$src" "$dst"
+}
+
+# 以 root 写入文本文件（幂等 + 自动备份），供 /etc 下的配置使用
+write_root_file() {
+	local path="$1" content="$2" bak tmp
+
+	tmp="$(mktemp)"
+	printf '%s\n' "$content" >"$tmp"
+
+	if [[ $DRY_RUN == false ]] && as_root test -f "$path" && ! as_root cmp -s "$tmp" "$path"; then
+		bak="${path}.bak.$(date +%Y%m%d%H%M%S)"
+		as_root cp -a -- "$path" "$bak"
+		warn "原文件已备份 → ${bak}"
+	fi
+
+	if [[ $DRY_RUN == true ]]; then
+		printf '%s  [dry-run]%s 写入 %s（root）\n' "$C_CYAN" "$C_RESET" "$path"
+	else
+		as_root install -Dm644 "$tmp" "$path"
+		ok "写入 ${path}"
+	fi
+
+	rm -f "$tmp"
 }
 
 # --------------------------------------------------------------------------- #
@@ -617,6 +647,7 @@ deploy_autostart() {
 	run mkdir -p "${AUTOSTART_DIR}/scripts"
 
 	install_file "${REPO_DIR}/scripts/autostart.sh" "${AUTOSTART_DIR}/autostart.sh" 755
+	install_file "${REPO_DIR}/scripts/lock.sh" "${AUTOSTART_DIR}/scripts/lock.sh" 755
 
 	local s
 	for s in "${REPO_DIR}"/scripts/statusbar/*.sh; do
@@ -784,6 +815,72 @@ append_system_env() {
 }
 
 # --------------------------------------------------------------------------- #
+# 步骤 7：系统级电源策略（仅 --system-env）
+# --------------------------------------------------------------------------- #
+
+# dconf 系统级电源策略：禁止自动挂起 + 空闲 15 分钟熄屏
+dconf_power_content() {
+	cat <<'EOF'
+# 由 dwm/install.sh 生成 —— 电源 / 熄屏策略
+# 1) 空闲 15 分钟（900 秒）后关闭屏幕
+# 2) 禁止自动挂起（交流与电池都不挂起）
+[org/gnome/desktop/session]
+idle-delay=uint32 900
+
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='nothing'
+sleep-inactive-battery-type='nothing'
+sleep-inactive-ac-timeout=0
+sleep-inactive-battery-timeout=0
+EOF
+}
+
+# dconf 只有在 profile 里声明了 system-db:local 时才会读取 db/local.d/
+dconf_profile_content() {
+	cat <<'EOF'
+user-db:user
+system-db:local
+EOF
+}
+
+# 写入 dconf 系统级电源策略，然后重新编译数据库
+# 注意：dconf 只对 GNOME 会话（含 GDM 登录界面）生效；
+#       dwm 会话的熄屏由 ~/.dwm/autostart.sh 里的 xset 负责（见 SCREEN_TIMEOUT）。
+setup_power_policy() {
+	step "写入系统级电源策略（dconf）"
+
+	if [[ ! -d /etc/dconf ]]; then
+		warn "未发现 /etc/dconf（系统未安装 dconf），跳过电源策略"
+		return 0
+	fi
+
+	write_root_file "${DCONF_POWER_FILE}" "$(dconf_power_content)"
+
+	if [[ $DRY_RUN == true ]]; then
+		printf '%s  [dry-run]%s 确保 %s 引用 system-db:local\n' \
+			"$C_CYAN" "$C_RESET" "${DCONF_PROFILE}"
+	elif as_root test -f "${DCONF_PROFILE}"; then
+		if as_root grep -qE '^[[:space:]]*system-db:local[[:space:]]*$' "${DCONF_PROFILE}"; then
+			log "${DCONF_PROFILE} 已引用 system-db:local"
+		else
+			as_root cp -a -- "${DCONF_PROFILE}" "${DCONF_PROFILE}.bak.$(date +%Y%m%d%H%M%S)"
+			printf '%s\n' 'system-db:local' \
+				| as_root tee -a "${DCONF_PROFILE}" >/dev/null
+			ok "已向 ${DCONF_PROFILE} 追加 system-db:local"
+		fi
+	else
+		write_root_file "${DCONF_PROFILE}" "$(dconf_profile_content)"
+	fi
+
+	if have dconf; then
+		as_root dconf update
+		ok "dconf 数据库已更新（注销重新登录后生效）"
+	else
+		warn "未找到 dconf 命令，请手动执行：sudo dconf update"
+	fi
+}
+
+# --------------------------------------------------------------------------- #
 # 卸载
 # --------------------------------------------------------------------------- #
 
@@ -806,6 +903,8 @@ do_uninstall() {
 	log "${ENVD_DIR}/10-ime.conf（输入法环境变量）"
 	log "${XPROFILE} 中 'dwm install.sh: ime' 标记之间的内容"
 	log "/etc/environment 中 'dwm install.sh: ime' 标记之间的内容（若用过 --system-env）"
+	log "${DCONF_POWER_FILE}（若用过 --system-env 写入过电源策略）"
+	log "${DCONF_PROFILE} 中追加的 system-db:local 行（若该文件由本脚本创建，可整个删除）"
 	log "${RIME_DIR}/default.custom.yaml（Rime 方案配置）"
 	log "${RIME_DIR}/（若由本脚本下载过雾凇拼音，整个目录都是本脚本产生的）"
 	log "${FONT_DIR}（若由本脚本下载过 Maple Mono CN 字体）"
@@ -852,6 +951,11 @@ main() {
 		setup_ime
 	fi
 
+	# --system-env 的含义是「写入系统级配置」：除输入法环境变量外，还包括电源策略
+	if [[ $USE_SYSTEM_ENV == true ]]; then
+		setup_power_policy
+	fi
+
 	if [[ $WITH_EXTRAS == true ]]; then
 		install_extras
 	fi
@@ -865,11 +969,17 @@ main() {
   2. 首次启动后确认状态栏正常：pkill -RTMIN+11 dwmblocks 可手动刷新音量/亮度
   3. 修改 src/config.h 或 dwmblocks/blocks.h 后需重新执行 ./${SCRIPT_NAME}
      （或手动 make -C src / make -C dwmblocks）
+  4. Super + Escape 手动锁屏；空闲 15 分钟自动熄屏并上锁
+     （时长见 ~/.dwm/autostart.sh 顶部的 SCREEN_TIMEOUT）
 
 EOF
 
 	if [[ $WITH_IME == true && $USE_SYSTEM_ENV == false ]]; then
 		log "输入法环境变量写入的是用户级配置，若某些应用仍不生效可尝试：./${SCRIPT_NAME} --system-env"
+	fi
+	if [[ $USE_SYSTEM_ENV == true ]]; then
+		log "电源策略已写入 ${DCONF_POWER_FILE}（对 GNOME 会话生效）"
+		log "dwm 会话的熄屏由 autostart.sh 的 SCREEN_TIMEOUT 控制（默认 900 秒）"
 	fi
 }
 
