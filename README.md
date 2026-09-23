@@ -3,10 +3,28 @@
 基于 [dwm 6.4](https://dwm.suckless.org/) 的个人桌面环境配置，包含窗口管理器源码、状态栏程序、
 自启脚本、状态栏脚本，以及一套附赠的 Hyprland / Waybar / Kitty / Rofi 配置。
 
-提供 `install.sh` 一键完成「装依赖 → 编译 → 安装 → 部署配置 → 配置输入法」，
+提供 `install.sh` 一键完成「装依赖 → 编译 → 安装 → 部署脚本（含锁屏 / 熄屏）→ 配置输入法」，
 自动识别 **Arch 系** 与 **Debian / Ubuntu 系** 发行版。
 
 ![dwm](dwm.png)
+
+---
+
+## 📖 目录
+
+- [✨ 特性](#-特性)
+- [📁 目录结构](#-目录结构)
+- [📦 依赖](#-依赖)
+- [🚀 快速开始](#-快速开始)
+- [🔧 手动安装](#-手动安装)
+- [🩹 已应用的补丁](#-已应用的补丁)
+- [⌨️ 快捷键](#-快捷键)
+- [⚙️ 配置说明](#-配置说明)
+- [🀄 输入法（fcitx5 + 雾凇拼音）](#-输入法fcitx5--雾凇拼音)
+- [🎁 附赠配置（extras/）](#-附赠配置extras)
+- [🗑 卸载](#-卸载)
+- [❓ 常见问题](#-常见问题)
+- [📄 许可](#-许可)
 
 ---
 
@@ -15,6 +33,8 @@
 - **dwm 6.4** 深度定制：窗口间隙（vanitygaps）、状态栏半透明 + 系统托盘、暂存窗口、
   全屏、每个标签独立记忆布局参数（pertag）
 - **dwmblocks** 状态栏：网速 / CPU / 内存 / 音量 / 亮度 / 电量 / 时间
+- **自动锁屏**：`xss-lock` 监听空闲 / 熄屏 / 挂起事件自动上锁，锁屏程序自动挑选（`slock` / `i3lock` / `betterlockscreen`）；`Super + Escape` 手动锁屏
+- **熄屏 / 挂起策略**：dwm 会话空闲 15 分钟熄屏（`xset` + DPMS，`SCREEN_TIMEOUT` 可调）；`--system-env` 时写入 dconf，禁止自动挂起（GNOME / GDM）
 - **一键安装脚本** `install.sh`：幂等、支持 `--dry-run`、支持 `--uninstall`
 - **跨发行版**：自动区分 `pacman` / `apt`，Ubuntu 上自动补齐拆分后的 fcitx5 包
 - **fcitx5 + 雾凇拼音** 自动配置（含环境变量）
@@ -41,6 +61,7 @@ dwm/
 │   └── blocks.def.h          # 上游默认模块定义
 ├── scripts/                  # 部署到 ~/.dwm 的运行时脚本
 │   ├── autostart.sh          #   → ~/.dwm/autostart.sh
+│   ├── lock.sh               #   → ~/.dwm/scripts/lock.sh（锁屏，键位与 xss-lock 共用）
 │   └── statusbar/            #   → ~/.dwm/scripts/
 │       ├── wlan.sh  cpu.sh  memory.sh  volume.sh
 │       └── backlight.sh  battery.sh  date.sh
@@ -60,7 +81,7 @@ dwm/
 | --- | --- |
 | `src/` 只负责 dwm 本体 | `make -C src`、`sudo make -C src install` |
 | 打补丁要进 `src/` | `patch -d src -p1 < patches/xxx.diff`（见 `patches/README.md`） |
-| `scripts/statusbar/` → `~/.dwm/scripts/` | `blocks.h` 里写死了 `~/.dwm/scripts/xxx.sh`，目录名即部署目标 |
+| `scripts/statusbar/`、`scripts/lock.sh` → `~/.dwm/scripts/` | `blocks.h` / `config.h` 里写死了 `~/.dwm/scripts/xxx.sh`，目录名即部署目标 |
 | `extras/<name>/` → `~/.config/<name>/` | 附赠配置，`install.sh --extras` 才会部署 |
 | 安装统一走 `install.sh` | 它是唯一入口，`Makefile` 只管各自编译 |
 
@@ -87,6 +108,9 @@ dwm/
 | `feh` | 设置壁纸 | `scripts/autostart.sh` | 同名 |
 | `picom` | 窗口合成器（透明 / 阴影） | `scripts/autostart.sh` | 同名 |
 | `dunst` | 通知守护进程 | `scripts/autostart.sh` | 同名 |
+| `xss-lock` | 监听空闲 / DPMS / 挂起事件，触发锁屏 | `scripts/autostart.sh` | 同名 |
+| `slock` | 锁屏程序（可换成 `i3lock` / `betterlockscreen`，见「锁屏」） | `scripts/autostart.sh` | 同名 |
+| `xorg-xset` | 空闲熄屏 / DPMS（`xset`，见「熄屏 / 挂起策略」） | `scripts/autostart.sh` | `x11-xserver-utils` |
 | `fcitx5-im` `fcitx5-rime` | 输入法 | 可选 | `fcitx5` `fcitx5-rime` `fcitx5-chinese-addons` `fcitx5-config-qt` `fcitx5-frontend-*` |
 | `rime-ice-git` | 雾凇拼音方案 | 可选 | 无对应包，脚本从 [上游 release](https://github.com/iDvel/rime-ice/releases) 下载 |
 | `maplemono-cn` | 界面字体 `Maple Mono CN` | 可选 | 无对应包，脚本从 [上游 release](https://github.com/subframe7536/maple-font/releases) 下载 |
@@ -165,7 +189,7 @@ cd dwm
 | `--no-ime` | 跳过 fcitx5 安装与雾凇拼音配置 |
 | `--no-font` | 跳过 `Maple Mono CN` 字体安装 |
 | `--extras` | 额外把 `extras/` 部署到 `~/.config/`（Hyprland / Waybar / Kitty / Rofi） |
-| `--system-env` | 把输入法环境变量写入 `/etc/environment`（需 root，影响全局） |
+| `--system-env` | 写入系统级配置（需 root）：`/etc/environment` 的输入法环境变量，以及 `/etc/dconf/db/local.d/00-power-settings` 电源策略 |
 | `--prefix DIR` | 安装前缀，默认 `/usr/local` |
 | `--autostart-dir DIR` | 自启文件部署目录，默认 `~/.dwm` |
 | `--uninstall` | 卸载（二进制、会话文件、`~/.dwm`） |
@@ -177,13 +201,14 @@ cd dwm
    - Debian 系上额外从 GitHub 下载 **雾凇拼音**（`rime-ice`）与 **Maple Mono CN** 字体
 3. `make -C src` 编译 dwm → `sudo make -C src install`（默认装到 `/usr/local/bin`）
 4. 编译安装 `dwmblocks`
-5. 部署 `scripts/autostart.sh` → `~/.dwm/autostart.sh`、
-   `scripts/statusbar/*.sh` → `~/.dwm/scripts/`，并补齐可执行权限
+5. 部署 `scripts/autostart.sh` → `~/.dwm/autostart.sh`，
+   `scripts/statusbar/*.sh`、`scripts/lock.sh` → `~/.dwm/scripts/`，并补齐可执行权限
 6. 安装 `dwm.desktop` 到 `/usr/share/xsessions/`
 7. 写入 fcitx5 环境变量（用户级，见下）并生成 `~/.local/share/fcitx5/rime/default.custom.yaml`
 8. 检查 `~/.dwm` 与 dwm 实际查找路径是否一致（见 FAQ）
 
 加 `--extras` 时另外把 `extras/<name>/` 复制到 `~/.config/<name>/`（覆盖前自动备份）。
+加 `--system-env` 时另外写入系统级电源策略（见「熄屏 / 挂起策略」）。
 
 ---
 
@@ -195,16 +220,17 @@ cd dwm
 ```bash
 # 1. 依赖
 sudo pacman -S --needed base-devel libx11 libxinerama libxft freetype2 fontconfig \
-    libxrender kitty rofi feh picom dunst
+    libxrender kitty rofi feh picom dunst xss-lock slock xorg-xset
 yay -S fcitx5-im fcitx5-rime rime-ice-git maplemono-cn
 
 # 2. 编译安装 dwm 与状态栏
 make -C src && sudo make -C src install
 make -C dwmblocks && sudo make -C dwmblocks install
 
-# 3. 部署自启与状态栏脚本
+# 3. 部署自启、锁屏与状态栏脚本
 mkdir -p ~/.dwm/scripts
 install -m755 scripts/autostart.sh ~/.dwm/autostart.sh
+install -m755 scripts/lock.sh ~/.dwm/scripts/lock.sh
 install -m755 scripts/statusbar/*.sh ~/.dwm/scripts/
 
 # 4. 会话文件
@@ -221,7 +247,8 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 sudo apt update
 sudo apt install -y build-essential libx11-dev libxinerama-dev libxft-dev \
     libfreetype6-dev libfontconfig1-dev libxrender-dev \
-    kitty rofi feh picom dunst brightnessctl alsa-utils iproute2 gawk unzip curl
+    kitty rofi feh picom dunst xss-lock slock brightnessctl alsa-utils iproute2 gawk unzip curl \
+    x11-xserver-utils
 
 # 2. 输入法（Ubuntu 上是拆分的多个包）
 sudo apt install -y fcitx5 fcitx5-chinese-addons fcitx5-rime fcitx5-config-qt \
@@ -248,6 +275,7 @@ make -C dwmblocks && sudo make -C dwmblocks install
 
 mkdir -p ~/.dwm/scripts
 install -m755 scripts/autostart.sh ~/.dwm/autostart.sh
+install -m755 scripts/lock.sh ~/.dwm/scripts/lock.sh
 install -m755 scripts/statusbar/*.sh ~/.dwm/scripts/
 
 sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
@@ -293,6 +321,7 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `Super + q` | 打开终端 kitty |
 | `Super + r` | 应用启动器 rofi（`rofi -show drun`） |
 | ``Super + ` `` | 呼出 / 隐藏暂存终端 scratchpad |
+| `Super + Escape` | 锁屏（`~/.dwm/scripts/lock.sh`，自动挑 slock / i3lock / betterlockscreen） |
 | `Super + b` | 显示 / 隐藏状态栏 |
 | `Super + Enter` | 窗口在主区 / 栈区之间切换（zoom） |
 | `Super + Tab` | 切回上一个视图 |
@@ -405,6 +434,7 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | 打开终端 | `Alt + Shift + Enter`（st） | `Super + q`（kitty） |
 | 应用启动器 | `Alt + p`（dmenu） | `Super + r`（rofi） |
 | 暂存终端 | — | ``Super + ` `` |
+| 锁屏 | — 上游没有 | `Super + Escape`（调 `~/.dwm/scripts/lock.sh`） |
 | 平铺 / 浮动 / 单窗口布局 | `Alt + t` / `f` / `m` | 同上游 |
 | 循环布局 | `Alt + Space` | 同上游 |
 | 切换当前窗口浮动 | `Alt + Shift + Space` | 同上游 |
@@ -449,6 +479,7 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `tags` | `1..9` | 标签名 |
 | `termcmd` | `kitty` | 终端命令 |
 | `roficmd` | `rofi -show drun` | 启动器命令 |
+| `LOCK_CMD` | `{XDG_DATA_HOME}/dwm/scripts/lock.sh`（回退 `~/.dwm/scripts/lock.sh`） | 锁屏（`Super + Escape`），锁屏程序由脚本内部挑选 |
 
 ### blocks.h 与状态栏信号
 
@@ -484,6 +515,98 @@ dwm 启动后会依次执行（见 `dwm.c` 的 `runautostart()`）：
 2. `~/.dwm/autostart.sh`（后台执行）
 
 查找路径顺序：`$XDG_DATA_HOME/dwm` → `~/.local/share/dwm` → `~/.dwm`（**只要前一个目录存在就用它**）。
+
+### 锁屏（xss-lock + slock）
+
+X11 本身不会「空闲一段时间就锁屏」，dwm 也不带锁屏功能。
+标准做法是让 **xss-lock** 监听空闲 / DPMS / 挂起事件，事件到来时调用锁屏程序
+（`scripts/autostart.sh` 已内置这段逻辑）：
+
+```bash
+sudo apt install xss-lock slock      # Debian / Ubuntu
+sudo pacman -S xss-lock slock        # Arch
+```
+
+`~/.dwm/autostart.sh` 启动时会：
+
+1. 按 `betterlockscreen` → `i3lock` → `slock` 的顺序，挑一个**已安装**的锁屏程序
+2. 拉起 `xss-lock -- <锁屏程序>` 常驻，空闲 / 熄屏 / 挂起前自动锁屏
+
+想用更好看的锁屏（`i3lock` / `betterlockscreen`），装好即可 —— 脚本会自动优先选到它；
+也可以显式指定，带参数也没问题：
+
+```bash
+# 写进 ~/.xprofile / ~/.xsessionrc（对所有会话生效）
+export LOCKER="betterlockscreen -l"
+export LOCKER="i3lock -n -c 222222"
+```
+
+> `slock` 校验的是当前用户的登录密码，**必须先设置密码**（`passwd`），否则锁屏后敲一下就能解开。
+
+**手动锁屏**：`Super + Escape`，或直接执行 `~/.dwm/scripts/lock.sh`。
+键位与 `xss-lock` 调用的是**同一个脚本**，锁屏程序的挑选逻辑只写在它里面：
+
+```bash
+~/.dwm/scripts/lock.sh                  # 自动挑：LOCKER → betterlockscreen → i3lock → slock
+LOCKER="slock -v" ~/.dwm/scripts/lock.sh
+```
+
+> 键位里的路径按 dwm 自己的查找顺序定位（`$XDG_DATA_HOME/dwm` → `~/.local/share/dwm` → `~/.dwm`，
+> 见 `src/config.h` 的 `LOCK_CMD`）；用 `--autostart-dir` 装到别处时记得同步改这一行。
+> 锁屏时机（多久算空闲、多久后 DPMS 熄屏）由 X 的空闲计时器决定，
+> `xss-lock` 只负责「事件来了就调锁屏」，计时本身见下一节。
+
+### 熄屏 / 挂起策略
+
+「多久关屏」「会不会自动挂起」按会话类型分两层设置，互不干扰：
+
+| 层 | 作用范围 | 由谁设置 |
+| --- | --- | --- |
+| X（`xset`） | **dwm 会话** | `scripts/autostart.sh`（默认生效） |
+| dconf | GNOME 会话、GDM 登录界面 | `./install.sh --system-env` |
+
+**dwm 会话**：`~/.dwm/autostart.sh` 启动时会设置
+
+```bash
+xset s 900 900             # 空闲 15 分钟（900 秒）黑屏
+xset +dpms dpms 0 0 900    # 紧接着 DPMS 关屏（不走 standby / suspend）
+```
+
+关屏的同时会触发 `xss-lock` 锁屏（见上一节）。想改时长或彻底关掉：
+
+```bash
+export SCREEN_TIMEOUT=1800   # 空闲 30 分钟熄屏
+export SCREEN_TIMEOUT=0      # 永不自动熄屏（等价 xset s off; xset -dpms）
+```
+
+写进 `~/.xprofile`（Arch）/ `~/.xsessionrc`（Debian / Ubuntu）即可全局生效。
+
+**GNOME / GDM（需 `--system-env`）**：写入 `/etc/dconf/db/local.d/00-power-settings`
+
+```ini
+# 空闲 15 分钟后关闭屏幕
+[org/gnome/desktop/session]
+idle-delay=uint32 900
+
+# 禁止自动挂起（交流与电池都不挂起）
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='nothing'
+sleep-inactive-battery-type='nothing'
+sleep-inactive-ac-timeout=0
+sleep-inactive-battery-timeout=0
+```
+
+```bash
+./install.sh --system-env   # 写入策略 + dconf update（脚本内部自己用 sudo）
+```
+
+脚本还会确保 `/etc/dconf/profile/user` 里声明了 `system-db:local`
+（没有这行 dconf 根本不会读 `local.d/`），最后执行 `dconf update` 编译数据库；
+**注销重新登录后生效**。
+
+> **两层都要，原因**：`dwm` 是纯 X11 会话，根本不读 dconf；
+> 所以 dconf 那份管的是 GDM 登录界面与 GNOME 会话，`xset` 那份管 dwm 自己。
+> 机器不会自动挂起后也别担心忘记锁屏——熄屏时 `xss-lock` 会照常锁上。
 
 ### 字符字体
 
@@ -585,6 +708,7 @@ done
 | `~/.local/share/fcitx5/rime/` | Debian / Ubuntu 上下载雾凇拼音时 |
 | `~/.local/share/fonts/MapleMono-CN/` | Debian / Ubuntu 上下载字体时 |
 | `~/.config/{hypr,waybar,kitty,rofi}` | 用过 `--extras` 时 |
+| `/etc/dconf/db/local.d/00-power-settings` | 用过 `--system-env` 时（另需检查 `/etc/dconf/profile/user` 里追加的 `system-db:local`） |
 
 ---
 
@@ -621,6 +745,17 @@ done
 1. 确认 `~/.dwm/autostart.sh` 存在且**可执行**（`chmod +x`）
 2. 确认 `~/.local/share/dwm` **不存在**，否则 dwm 会用那个目录而忽略 `~/.dwm`
 3. 单独运行 `sh -x ~/.dwm/autostart.sh` 看报错
+
+**Q：明明写了 dconf 电源策略，dwm 里屏幕还是照旧？**
+`dconf` 只被 GNOME 会话读取，dwm 是纯 X11 会话，看的是 `scripts/autostart.sh` 里的
+`xset`（用 `SCREEN_TIMEOUT` 调）。dconf 那份管的是 GDM 登录界面与 GNOME 会话，
+两层都要设，详见「熄屏 / 挂起策略」。
+
+**Q：人离开一会儿不会自动锁屏？挂起回来还是桌面？**
+1. 确认 `xss-lock` 与锁屏程序都在（`command -v xss-lock slock`）
+2. 确认 `xss-lock` 在跑（`pgrep -x xss-lock`），没在跑就看 `sh -x ~/.dwm/autostart.sh` 的报错
+3. `slock` 需要该用户**有登录密码**，否则锁不住（见「锁屏」）
+4. 触发时机由 X 的空闲 / DPMS 计时决定，`xss-lock` 只负责在事件到来时调锁屏程序
 
 **Q：fcitx5 在 kitty / GTK 应用里打不出中文？**
 检查环境变量是否生效（`env | grep IM_MODULE`）、`fcitx5-gtk`/`fcitx5-qt` 是否安装，
