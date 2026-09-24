@@ -15,6 +15,10 @@
 #     Debian / Ubuntu: sudo apt install wmctrl
 #     Arch:            sudo pacman -S wmctrl
 #
+# 注意：窗口能不能**真的**被切到前台，还取决于窗口管理器是否响应 _NET_ACTIVE_WINDOW：
+#   本仓库的 dwm 打了 focusonnetactive（见 patches/README.md），所以 wmctrl -i -a 就是切窗口；
+#   上游 dwm / 没打这个补丁的配置只会给窗口置「紧急」标记（边框闪一下）。
+#
 # 应用名从哪来：
 #   dunst 的菜单输入里没有应用名，所以由同目录的 dunst-sender.sh（dunstrc 里的 [sender] 规则）
 #   在通知显示时把「通知 id → 应用名 / desktop-entry」记到 ~/.cache/dunst-sender.tsv，

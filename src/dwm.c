@@ -668,8 +668,22 @@ clientmessage(XEvent *e)
 			setfullscreen(c, (cme->data.l[0] == 1 /* _NET_WM_STATE_ADD    */
 				|| (cme->data.l[0] == 2 /* _NET_WM_STATE_TOGGLE */ && !c->isfullscreen)));
 	} else if (cme->message_type == netatom[NetActiveWindow]) {
-		if (c != selmon->sel && !c->isurgent)
+		if (focusonnetactive && c != selmon->sel) {
+			/* 外部程序请求把窗口提到前台（点 dunst 通知菜单跳窗口就走这里）：
+			 * 先切到它所在的显示器与标签，再聚焦并调整栈顺序。
+			 * 上游只置紧急标记、不抢焦点（防焦点抢占），那样只会闪一下不过去。 */
+			Arg a = { .ui = c->tags };
+			if (c->mon != selmon) {
+				unfocus(selmon->sel, 0);
+				selmon = c->mon;
+			}
+			seturgent(c, 0);
+			view(&a);
+			focus(c);
+			restack(c->mon);
+		} else if (c != selmon->sel && !c->isurgent) {
 			seturgent(c, 1);
+		}
 	}
 }
 
