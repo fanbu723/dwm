@@ -1,9 +1,9 @@
 # dwm — 我的 dwm 桌面配置（Arch Linux / Ubuntu）
 
 基于 [dwm 6.4](https://dwm.suckless.org/) 的个人桌面环境配置，包含窗口管理器源码、状态栏程序、
-自启脚本、状态栏脚本，以及一套附赠的 Hyprland / Waybar / Kitty / Rofi 配置。
+自启脚本、状态栏脚本、一套 zsh / oh-my-zsh 配置，以及一套附赠的 Hyprland / Waybar / Kitty / Rofi 配置。
 
-提供 `install.sh` 一键完成「装依赖 → 编译 → 安装 → 部署脚本（含锁屏 / 熄屏）→ 配置输入法」，
+提供 `install.sh` 一键完成「装依赖 → 编译 → 安装 → 部署脚本（含锁屏 / 熄屏）→ 配置输入法 → 部署 zsh」，
 自动识别 **Arch 系** 与 **Debian / Ubuntu 系** 发行版。
 
 ![dwm](dwm.png)
@@ -21,6 +21,7 @@
 - [⌨️ 快捷键](#-快捷键)
 - [⚙️ 配置说明](#-配置说明)
 - [🀄 输入法（fcitx5 + 雾凇拼音）](#-输入法fcitx5--雾凇拼音)
+- [🐚 zsh 配置（oh-my-zsh）](#-zsh-配置oh-my-zsh)
 - [🎁 附赠配置（extras/）](#-附赠配置extras)
 - [🗑 卸载](#-卸载)
 - [❓ 常见问题](#-常见问题)
@@ -38,6 +39,8 @@
 - **一键安装脚本** `install.sh`：幂等、支持 `--dry-run`、支持 `--uninstall`
 - **跨发行版**：自动区分 `pacman` / `apt`，Ubuntu 上自动补齐拆分后的 fcitx5 包
 - **fcitx5 + 雾凇拼音** 自动配置（含环境变量）
+- **zsh 环境一键部署**：oh-my-zsh（清华镜像）+ 12 个常用插件（自动建议 / 语法高亮 / `z` 跳转等），
+  部署 `~/.zshrc` 并可顺手把登录 shell 改成 zsh
 - 附赠 **Hyprland** 完整配置（`extras/`），与 dwm 共存互不影响
 
 ---
@@ -66,6 +69,9 @@ dwm/
 │       ├── wlan.sh  cpu.sh  memory.sh  volume.sh
 │       └── backlight.sh  battery.sh  date.sh
 ├── extras/                   # 附赠配置（Hyprland / Waybar / Kitty / Rofi）
+├── zsh/                      # zsh 环境（oh-my-zsh 默认走清华镜像）
+│   ├── zshrc                 #   → ~/.zshrc（主题 / 插件 / 键位）
+│   └── README.md             #   插件清单与手动安装步骤
 ├── patches/                  # 补丁存档与说明（见 patches/README.md）
 ├── dwm.desktop               # XSession 会话文件（安装到 /usr/share/xsessions）
 ├── dwm.png                   # dwm 图标（README 顶部图片）
@@ -83,6 +89,7 @@ dwm/
 | 打补丁要进 `src/` | `patch -d src -p1 < patches/xxx.diff`（见 `patches/README.md`） |
 | `scripts/statusbar/`、`scripts/lock.sh` → `~/.dwm/scripts/` | `blocks.h` / `config.h` 里写死了 `~/.dwm/scripts/xxx.sh`，目录名即部署目标 |
 | `extras/<name>/` → `~/.config/<name>/` | 附赠配置，`install.sh --extras` 才会部署 |
+| `zsh/zshrc` → `~/.zshrc` | zsh 主配置（`~/.oh-my-zsh` 不收录在仓库里，由脚本克隆） |
 | 安装统一走 `install.sh` | 它是唯一入口，`Makefile` 只管各自编译 |
 
 ---
@@ -118,6 +125,7 @@ dwm/
 | `alsa-utils` 或 `pipewire-pulse` | 音量（优先 `pactl`，回退 `amixer`） | 可选 | 同名 |
 | `iproute2` `awk` | 网速模块 | 可选 | 同名 |
 | `unzip` `curl` | 下载 / 解压上游字体与词库 | 可选 | 同名 |
+| `zsh` `git` | zsh 登录 shell；克隆 oh-my-zsh 与插件（见「zsh 配置」） | 可选（`--no-zsh` 可跳过） | 同名 |
 
 > 依赖缺失不会让 dwm 起不来，只是对应的状态栏模块显示为空。
 > Ubuntu 上 `picom`、`kitty`、`brightnessctl` 等包在较老版本（如 20.04）可能不存在，
@@ -188,6 +196,8 @@ cd dwm
 | `--no-dwmblocks` | 不编译安装状态栏 |
 | `--no-ime` | 跳过 fcitx5 安装与雾凇拼音配置 |
 | `--no-font` | 跳过 `Maple Mono CN` 字体安装 |
+| `--no-zsh` | 跳过 zsh 配置（oh-my-zsh / 插件 / `~/.zshrc` / 登录 shell） |
+| `--no-chsh` | 只部署 zsh 配置，不改登录 shell |
 | `--extras` | 额外把 `extras/` 部署到 `~/.config/`（Hyprland / Waybar / Kitty / Rofi） |
 | `--system-env` | 写入系统级配置（需 root）：`/etc/environment` 的输入法环境变量，以及 `/etc/dconf/db/local.d/00-power-settings` 电源策略 |
 | `--prefix DIR` | 安装前缀，默认 `/usr/local` |
@@ -206,6 +216,8 @@ cd dwm
 6. 安装 `dwm.desktop` 到 `/usr/share/xsessions/`
 7. 写入 fcitx5 环境变量（用户级，见下）并生成 `~/.local/share/fcitx5/rime/default.custom.yaml`
 8. 检查 `~/.dwm` 与 dwm 实际查找路径是否一致（见 FAQ）
+9. 部署 zsh：克隆 oh-my-zsh（清华镜像，已存在则跳过）与两个自定义插件，写入 `~/.zshrc`，
+   并在确认后把登录 shell 改成 zsh（`--no-zsh` / `--no-chsh` 可跳过）
 
 加 `--extras` 时另外把 `extras/<name>/` 复制到 `~/.config/<name>/`（覆盖前自动备份）。
 加 `--system-env` 时另外写入系统级电源策略（见「熄屏 / 挂起策略」）。
@@ -658,6 +670,56 @@ GLFW_IM_MODULE=ibus
 
 ---
 
+## 🐚 zsh 配置（oh-my-zsh）
+
+当前在用的 zsh 环境也收进了仓库，`install.sh` 会一并部署；不想动它加 `--no-zsh` 即可。
+
+| 仓库路径 | 部署目标 | 内容 |
+| --- | --- | --- |
+| `zsh/zshrc` | `~/.zshrc` | 主题 `robbyrussell`、插件列表、`history-substring-search` 键位 |
+| `zsh/README.md` | —— | 插件清单、镜像 / 代理、手动安装步骤 |
+
+插件共 12 个，其中 10 个是 oh-my-zsh 自带：
+
+```
+git  gitfast  z  sudo  extract  colored-man-pages
+command-not-found  history-substring-search  copypath  copyfile
+```
+
+另外两个需要单独克隆到 `~/.oh-my-zsh/custom/plugins/`：
+
+| 插件 | 来源 | 作用 |
+| --- | --- | --- |
+| `zsh-autosuggestions` | [zsh-users](https://github.com/zsh-users/zsh-autosuggestions) | 按历史给灰色建议，`→` 补全 |
+| `zsh-syntax-highlighting` | [zsh-users](https://github.com/zsh-users/zsh-syntax-highlighting) | 命令语法高亮（**必须排在插件列表最后**） |
+
+oh-my-zsh 默认从**清华镜像**克隆 —— `https://mirrors.tuna.tsinghua.edu.cn/git/ohmyzsh.git`
+（[镜像用法](https://mirrors.tuna.tsinghua.edu.cn/help/ohmyzsh.git/)），两个插件走 GitHub。
+
+### 部署行为
+
+- 已存在的 `~/.oh-my-zsh`、`~/.oh-my-zsh/custom/plugins/<名字>/` **不覆盖、不更新**，只补齐缺失的
+- `~/.zshrc` 与仓库内容不同时，先备份成 `~/.zshrc.bak.<时间戳>` 再写入
+- 登录 shell 不是 zsh 时会先确认 zsh 在 `/etc/shells` 中，然后**询问**是否
+  `chsh -s "$(command -v zsh)"`（`--no-chsh` 直接跳过）
+
+### 用法
+
+```bash
+./install.sh              # 装依赖（含 zsh / git）+ 克隆 oh-my-zsh 与插件 + 部署 ~/.zshrc
+./install.sh --no-zsh     # 完全不动 zsh
+./install.sh --no-chsh    # 只部署配置，不改登录 shell
+
+# 换源 / 走代理（国内网络）
+DWM_OMZ_GIT_URL=https://github.com/ohmyzsh/ohmyzsh ./install.sh
+ZSH_GH_MIRROR=https://ghproxy.net/https://github.com ./install.sh
+```
+
+改主题、加插件都是改 `zsh/zshrc`（主题名见 `~/.oh-my-zsh/themes/`），改完重跑 `./install.sh`
+或在仓库里直接 `cp zsh/zshrc ~/.zshrc`。
+
+---
+
 ## 🎁 附赠配置（extras/）
 
 `extras/` 里是另一套桌面环境 —— **Hyprland** —— 的配置，与 dwm **完全独立**：
@@ -708,6 +770,8 @@ done
 | `~/.local/share/fcitx5/rime/` | Debian / Ubuntu 上下载雾凇拼音时 |
 | `~/.local/share/fonts/MapleMono-CN/` | Debian / Ubuntu 上下载字体时 |
 | `~/.config/{hypr,waybar,kitty,rofi}` | 用过 `--extras` 时 |
+| `~/.zshrc` | 部署 zsh 配置时（原文件已备份为 `~/.zshrc.bak.*`） |
+| `~/.oh-my-zsh/` | 克隆 oh-my-zsh 与插件时（如果改过登录 shell，需要手动改回：`chsh -s "$(command -v bash)"`） |
 | `/etc/dconf/db/local.d/00-power-settings` | 用过 `--system-env` 时（另需检查 `/etc/dconf/profile/user` 里追加的 `system-db:local`） |
 
 ---
@@ -791,6 +855,20 @@ Debian 系的 `/etc/X11/Xsession` 读取的是 `~/.xsessionrc`（不是 `~/.xpro
 **Q：Ubuntu 上雾凇拼音 / 字体下载失败？**
 需要能访问 GitHub。可稍后手动下载安装，参见「字符字体」与「输入法」两节，
 或用 `--no-ime` / `--no-font` 先跳过。
+
+**Q：`install.sh` 会不会覆盖我现在的 `~/.oh-my-zsh` 和 `~/.zshrc`？**
+不会。`~/.oh-my-zsh` 与已存在的插件目录一律跳过（只补齐缺失的），不会覆盖也不会更新；
+`~/.zshrc` 内容不同时会先备份成 `~/.zshrc.bak.<时间戳>` 再写入。
+不想让脚本碰 zsh 就加 `--no-zsh`。
+
+**Q：oh-my-zsh / 插件克隆很慢或失败？**
+oh-my-zsh 默认走清华镜像；两个插件来自 GitHub，慢的话用代理前缀重跑：
+
+```bash
+ZSH_GH_MIRROR=https://ghproxy.net/https://github.com ./install.sh
+```
+
+也可以手动 clone 到 `~/.oh-my-zsh/custom/plugins/`（已存在目录会被跳过），见 `zsh/README.md`。
 
 ---
 
