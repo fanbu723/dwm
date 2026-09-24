@@ -13,6 +13,7 @@
 | alphasystray     | 让状态栏有半透明的效果，并增加系统托盘        |
 | autostart        | 让 dwm 在启动时自动启动一个脚本               |
 | awesomebar       | 让状态栏显示当前桌面的所有窗口的名称          |
+| focusonnetactive | 响应 `_NET_ACTIVE_WINDOW`（点通知跳窗口要用）  |
 | fullscreen       | 让窗口可以全屏                                |
 | hide_vacant_tags | 让状态栏只显示有窗口的桌面的标签              |
 | noborder         | 当只有一个窗口时，去除窗口的边框              |
@@ -24,7 +25,7 @@
 
 ## 应用状态
 
-上表中的 11 个补丁**只有 8 个真正生效**，其余 3 个只是备选，代码里并不存在；
+上表中的 12 个补丁**只有 9 个真正生效**，其余 3 个只是备选，代码里并不存在；
 另外 `statuscmd` 也未应用。本目录的 diff 也**只归档了** `fullscreen` 与 `scratchpad` 两个。
 
 ### 已应用（已打进 `dwm.c`）
@@ -39,6 +40,7 @@
 | scratchpad | 任意标签都能呼出暂存终端（``Super + ` ``） | `togglescratch()` |
 | rotatestack | 调整窗口在栈中的顺序（`Super + Shift + j/k`） | `rotatestack()` |
 | autostart | 启动时执行 `~/.dwm/autostart.sh` | `runautostart()` |
+| focusonnetactive | 外部程序请求激活窗口时（`wmctrl -a` / `xdotool windowactivate`，即 dunst 通知菜单里点「↗ 打开」）切到它所在的显示器 / 标签并聚焦 | `config.h` 的 `focusonnetactive`、`clientmessage()` 里的 `netatom[NetActiveWindow]` 分支 |
 
 ### 未应用（仅备选，`dwm.c` 中不存在）
 
@@ -48,6 +50,11 @@
 | noborder | 只有一个窗口时去掉边框 | 单窗口仍有边框（`borderpx = 1`） |
 | accessnthmonitor | 直接跳到第 n 个显示器 | 只能用 `Super + ,` / `.` 循环切换显示器 |
 | statuscmd | 点击状态栏时给 dwmblocks 发信号 | 点击状态栏不会刷新模块；音量 / 亮度改由 `config.h` 的快捷键发送 `pkill -RTMIN+11 dwmblocks` 刷新 |
+
+> `focusonnetactive` 是按上游同名补丁的思路**手写**的精简实现（上游的 diff 基于 6.2），
+> 没有归档 diff：`src/dwm.c` 里 `clientmessage()` 的 `netatom[NetActiveWindow]` 分支就是它的全部代码。
+> 上游 dwm 对这个请求只给窗口置「紧急」标记（边框变色）而不抢焦点，所以不打这个补丁时，
+> 点 dunst 通知菜单只会让目标窗口闪一下。
 
 ## 归档的 diff
 
@@ -79,7 +86,7 @@ patch -d src -p1 < patches/dwm-fullscreen-6.2.diff
 直接 grep 函数名或结构体名，就能确认补丁在不在：
 
 ```sh
-grep -nE 'rotatestack|togglescratch|togglewin|runautostart|fullscreen|Pertag' src/dwm.c
+grep -nE 'rotatestack|togglescratch|togglewin|runautostart|fullscreen|Pertag|focusonnetactive' src/dwm.c
 ```
 
 补丁来源：<https://dwm.suckless.org/patches/>

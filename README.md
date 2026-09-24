@@ -318,6 +318,7 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `scratchpad` | 临时终端，任意标签页呼出（``Super + ` ``） |
 | `rotatestack` | 调整窗口在栈中的顺序 |
 | `autostart` | 启动时执行 `~/.dwm/autostart.sh` |
+| `focusonnetactive` | 响应 `_NET_ACTIVE_WINDOW`：`wmctrl -a` 等请求能把窗口切到前台并聚焦（点 dunst 通知菜单跳窗口靠它；按上游同名补丁手写，`config.h` 里 `focusonnetactive` 可关） |
 
 另有 4 个补丁**未应用**（`hide_vacant_tags`、`noborder`、`accessnthmonitor`、`statuscmd`），
 它们对使用上的具体影响、以及归档的 diff，见 [`patches/README.md`](patches/README.md)。
@@ -495,6 +496,7 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `baralpha` | `0xd0` | 状态栏透明度 |
 | `borderpx` | `1` | 窗口边框宽度 |
 | `showsystray` | `1` | 显示系统托盘 |
+| `focusonnetactive` | `1` | 外部程序（dunst 通知菜单 / `wmctrl -a`）请求激活窗口时，切到该窗口的显示器 / 标签并聚焦；`0` = 上游行为（只置紧急标记） |
 | `tags` | `1..9` | 标签名 |
 | `termcmd` | `kitty` | 终端命令 |
 | `roficmd` | `rofi -show drun` | 启动器命令 |
@@ -767,6 +769,11 @@ sudo apt install wmctrl      # Debian / Ubuntu
 sudo pacman -S wmctrl        # Arch
 ```
 
+> **还要 dwm 配合**：上游 dwm 收到激活请求时只给窗口置「紧急」标记（边框变色）而不抢焦点，
+> 所以本仓库给 `src/dwm.c` 加了 `focusonnetactive`（见「已应用的补丁」与 `patches/README.md`）。
+> 换成没这个补丁的 dwm（或改了 `config.h` 里 `focusonnetactive = 0`）时，点通知只会让目标窗口闪一下。
+> 补丁改动后需要重新编译安装才生效：`./install.sh` 或 `sudo make -C src install`，重新登录后生效。
+
 > **应用名从哪来**：dunst 喂给菜单的内容只有动作项和链接，不带应用名，而 `dunstctl history`
 > 里只有已经关掉的通知（正在显示的查不到）。所以由 `dunst-sender.sh`（dunstrc 里的 `[sender]` 规则）
 > 在通知显示时把 `DUNST_ID` / `DUNST_APP_NAME` 记到 `~/.cache/dunst-sender.tsv`，点击时再查表：
@@ -947,9 +954,12 @@ ZSH_GH_MIRROR=https://ghproxy.net/https://github.com ./install.sh
 
 **Q：左键点了通知，却没有跳到对应程序？**
 1. 先确认装了 `wmctrl`（`command -v wmctrl`）—— 没装时菜单里不会有「↗ 打开…」这一项
-2. 看 `~/.cache/dunst-menu.log`：会记录每次识别到的应用名与结果，以及「未插入「打开」项」的原因
-3. 应用名和窗口的 `WM_CLASS` 差异太大时会匹配不上，可在 `dunstrc` 里给该应用加规则（文件末尾有示例）
-4. 通知本身带「默认动作」时，左键会直接执行那个动作（`do_action`）而不弹菜单；
+2. 确认 dwm 是**带 `focusonnetactive` 的那版**（`grep focusonnetactive src/config.h`）：
+   上游 dwm 对激活请求只置紧急标记，不改焦点；改过 `dwm.c` 后要 `./install.sh`
+   或 `sudo make -C src install` 并**重新登录**才生效
+3. 看 `~/.cache/dunst-menu.log`：会记录每次识别到的应用名与结果，以及「未插入「打开」项」的原因
+4. 应用名和窗口的 `WM_CLASS` 差异太大时会匹配不上，可在 `dunstrc` 里给该应用加规则（文件末尾有示例）
+5. 通知本身带「默认动作」时，左键会直接执行那个动作（`do_action`）而不弹菜单；
    想总是弹菜单就把 `mouse_left_click` 改成 `context`
 
 **Q：同一屏堆了好几条通知，点较早的那条却跳到了别的程序？**
