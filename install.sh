@@ -3,7 +3,7 @@
 # dwm + dwmblocks 一键安装脚本（Arch Linux / Debian / Ubuntu）
 #
 #   编译安装 dwm / dwmblocks → 部署自启脚本与状态栏脚本
-#   → 安装 XSession 会话文件 → 配置 fcitx5 + 雾凇拼音
+#   → 安装 XSession 会话文件 → 配置 fcitx5 + 雾凇拼音 → 部署 zsh（oh-my-zsh）
 #
 # 支持发行版：
 #   - Arch 系：pacman + yay/paru（AUR 提供雾凇拼音与 Maple Mono 字体）
@@ -28,6 +28,7 @@ REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="${REPO_DIR}/src"           # dwm 源码
 BLOCKS_DIR="${REPO_DIR}/dwmblocks"  # 状态栏（独立子项目）
 EXTRAS_DIR="${REPO_DIR}/extras"     # 附赠配置（Hyprland / Waybar / Kitty / Rofi）
+ZSH_DIR="${REPO_DIR}/zsh"           # zsh 配置（oh-my-zsh + 自定义插件）
 
 PREFIX="/usr/local"
 MANPREFIX="${PREFIX}/share/man"
@@ -53,6 +54,7 @@ PKGS_BUILD_ARCH=(base-devel libx11 libxinerama libxft freetype2 fontconfig libxr
 PKGS_RUNTIME_ARCH=(kitty rofi feh picom dunst xss-lock slock)
 PKGS_SCRIPT_ARCH=(brightnessctl alsa-utils iproute2 gawk unzip curl xorg-xset)
 PKGS_IME_ARCH=(fcitx5-im fcitx5-rime)
+PKGS_ZSH_ARCH=(zsh git)
 # AUR（安装失败不中断）
 PKGS_AUR_RIME_ARCH=(rime-ice-git)
 PKGS_AUR_FONT_ARCH=(maplemono-cn)
@@ -66,6 +68,18 @@ PKGS_RUNTIME_DEB=(kitty rofi feh picom dunst xss-lock slock)
 PKGS_SCRIPT_DEB=(brightnessctl alsa-utils iproute2 gawk unzip curl x11-xserver-utils)
 PKGS_IME_DEB=(fcitx5 fcitx5-chinese-addons fcitx5-rime fcitx5-config-qt
 	fcitx5-frontend-gtk2 fcitx5-frontend-gtk3 fcitx5-frontend-qt5)
+PKGS_ZSH_DEB=(zsh git)
+
+# ---- zsh / oh-my-zsh ----
+ZSH_RC="${ZSH_DIR}/zshrc"                # → ~/.zshrc
+OMZ_DIR="${HOME}/.oh-my-zsh"
+OMZ_PLUGINS_DIR="${OMZ_DIR}/custom/plugins"
+# oh-my-zsh 官方地址在国内较慢，默认用清华镜像（可用环境变量覆盖）
+OMZ_GIT_URL="${DWM_OMZ_GIT_URL:-https://mirrors.tuna.tsinghua.edu.cn/git/ohmyzsh.git}"
+# GitHub 前缀，可直接换成代理前缀，如 https://ghproxy.net/https://github.com
+ZSH_GH_MIRROR="${ZSH_GH_MIRROR:-https://github.com}"
+# 非 oh-my-zsh 自带的插件，需要单独 clone 到 $ZSH_CUSTOM/plugins/
+ZSH_CUSTOM_PLUGINS=(zsh-autosuggestions zsh-syntax-highlighting)
 
 # ---- 上游资源（Debian / Ubuntu 无 AUR，改为直接下载） ----
 RIME_ICE_URL="https://github.com/iDvel/rime-ice/releases/download/nightly/full.zip"
@@ -84,6 +98,8 @@ WITH_DWMBLOCKS=true
 WITH_IME=true
 WITH_FONT=true
 WITH_EXTRAS=false
+WITH_ZSH=true
+WITH_CHSH=true
 USE_SYSTEM_ENV=false
 DO_UNINSTALL=false
 
@@ -124,6 +140,8 @@ ${C_BOLD}选项${C_RESET}
       --extras             额外部署 extras/ 到 ~/.config/（Hyprland / Waybar / Kitty / Rofi）
       --no-ime             跳过 fcitx5 / 雾凇拼音配置
       --no-font            跳过 Maple Mono CN 字体安装
+      --no-zsh             跳过 zsh 配置（oh-my-zsh + 插件 + ~/.zshrc）
+      --no-chsh            部署 zsh 配置，但不改登录 shell
       --system-env         写入系统级配置（需 root，影响全局）：
                            /etc/environment 的输入法环境变量
                            + ${DCONF_POWER_FILE}
@@ -138,15 +156,21 @@ ${C_BOLD}发行版支持${C_RESET}
   - Debian / Ubuntu 系：apt，雾凇拼音与字体从上游 GitHub 发布包下载
   - 其它发行版：加 --no-deps 跳过依赖步骤，自行准备编译工具链
 
+${C_BOLD}zsh${C_RESET}
+  oh-my-zsh 默认从清华镜像克隆：${OMZ_GIT_URL}
+  可用环境变量覆盖：DWM_OMZ_GIT_URL（oh-my-zsh）、ZSH_GH_MIRROR（插件用的 GitHub 前缀）
+  已有的 ~/.oh-my-zsh 与插件目录不会被覆盖，~/.zshrc 有差异时先备份再写入
+
 ${C_BOLD}示例${C_RESET}
   ./${SCRIPT_NAME} --dry-run          # 先看看会做什么
   ./${SCRIPT_NAME}                    # 完整安装
   ./${SCRIPT_NAME} --no-deps --no-ime # 只编译安装，不动依赖和输入法
+  ./${SCRIPT_NAME} --no-zsh           # 不动 zsh 与登录 shell
   ./${SCRIPT_NAME} --system-env       # 额外写入 /etc（输入法环境变量 + 电源策略）
   ./${SCRIPT_NAME} --uninstall        # 卸载
 
 ${C_BOLD}安装后${C_RESET}
-  注销并重新登录，在登录界面选择 "Dwm" 会话。
+  注销并重新登录，在登录界面选择 "Dwm" 会话；新登录 shell 生效后可执行 exec zsh 立即切换。
 EOF
 }
 
@@ -161,6 +185,8 @@ parse_args() {
 			--extras)           WITH_EXTRAS=true ;;
 			--no-ime)           WITH_IME=false ;;
 			--no-font)          WITH_FONT=false ;;
+			--no-zsh)           WITH_ZSH=false ;;
+			--no-chsh)          WITH_CHSH=false ;;
 			--system-env)       USE_SYSTEM_ENV=true ;;
 			--prefix)           PREFIX="${2:?--prefix 需要一个参数}"; MANPREFIX="${PREFIX}/share/man"; shift ;;
 			--autostart-dir)    AUTOSTART_DIR="${2:?--autostart-dir 需要一个参数}"; shift ;;
@@ -561,11 +587,13 @@ install_deps() {
 		arch)
 			pkgs=("${PKGS_BUILD_ARCH[@]}" "${PKGS_RUNTIME_ARCH[@]}" "${PKGS_SCRIPT_ARCH[@]}")
 			[[ $WITH_IME == true ]] && pkgs+=("${PKGS_IME_ARCH[@]}")
+			[[ $WITH_ZSH == true ]] && pkgs+=("${PKGS_ZSH_ARCH[@]}")
 			install_deps_arch "${pkgs[@]}"
 			;;
 		debian)
 			pkgs=("${PKGS_BUILD_DEB[@]}" "${PKGS_RUNTIME_DEB[@]}" "${PKGS_SCRIPT_DEB[@]}")
 			[[ $WITH_IME == true ]] && pkgs+=("${PKGS_IME_DEB[@]}")
+			[[ $WITH_ZSH == true ]] && pkgs+=("${PKGS_ZSH_DEB[@]}")
 			install_deps_deb "${pkgs[@]}"
 			;;
 		*)
@@ -881,6 +909,114 @@ setup_power_policy() {
 }
 
 # --------------------------------------------------------------------------- #
+# 步骤 8：zsh（oh-my-zsh + 自定义插件 + ~/.zshrc）
+# --------------------------------------------------------------------------- #
+
+# 自定义插件的 clone 地址（前缀可换成 GitHub 代理）
+zsh_plugin_url() {
+	case "$1" in
+		zsh-autosuggestions)     echo "${ZSH_GH_MIRROR}/zsh-users/zsh-autosuggestions" ;;
+		zsh-syntax-highlighting) echo "${ZSH_GH_MIRROR}/zsh-users/zsh-syntax-highlighting" ;;
+		*)                       echo "" ;;
+	esac
+}
+
+# 当前登录 shell（从 /etc/passwd 读，$SHELL 在 sudo / 子 shell 里可能不准）
+current_login_shell() {
+	awk -F: -v u="$(id -un)" '$1 == u { print $7 }' /etc/passwd
+}
+
+# 克隆需要 git，缺了就直接失败（--no-deps 时尤其容易碰到）
+require_git() {
+	if [[ $DRY_RUN == false ]]; then
+		have git || die "需要 git 才能克隆 oh-my-zsh（请先安装 git，或加 --no-zsh 跳过本步）"
+	fi
+}
+
+# 克隆 oh-my-zsh 与自定义插件；已存在的一律跳过（不覆盖、不更新）
+install_omz() {
+	step "安装 oh-my-zsh"
+	log "源：${OMZ_GIT_URL}"
+
+	if [[ -d "${OMZ_DIR}/.git" ]]; then
+		ok "已存在 ${OMZ_DIR}，跳过克隆"
+	elif [[ -e "$OMZ_DIR" ]]; then
+		warn "${OMZ_DIR} 已存在但不是 git 仓库，跳过克隆（如需重装请先备份并删除该目录）"
+	else
+		require_git
+		run git clone --depth=1 "$OMZ_GIT_URL" "$OMZ_DIR"
+		ok "oh-my-zsh 已克隆到 ${OMZ_DIR}"
+	fi
+
+	local p dst
+	for p in "${ZSH_CUSTOM_PLUGINS[@]}"; do
+		dst="${OMZ_PLUGINS_DIR}/${p}"
+		if [[ -e "$dst" ]]; then
+			ok "插件已存在：${p}"
+			continue
+		fi
+
+		require_git
+		run mkdir -p "$OMZ_PLUGINS_DIR"
+		run git clone --depth=1 "$(zsh_plugin_url "$p")" "$dst"
+		ok "插件已克隆：${p}"
+	done
+}
+
+# 部署 ~/.zshrc（install_file 会自动备份内容不同的原文件）
+deploy_zshrc() {
+	step "部署 zsh 配置 → ${HOME}/.zshrc"
+	install_file "$ZSH_RC" "${HOME}/.zshrc" 644
+	ok "zsh 主配置已就绪（ZSH_THEME / 插件列表见 ~/.zshrc）"
+}
+
+# 把登录 shell 改成 zsh
+setup_login_shell() {
+	local zsh_bin current resolved_zsh resolved_now
+	zsh_bin="$(command -v zsh || true)"
+	if [[ -z "$zsh_bin" ]]; then
+		warn "未找到 zsh 命令，跳过修改登录 shell（可稍后安装 zsh 再执行：chsh -s \$(command -v zsh)）"
+		return 0
+	fi
+
+	# /bin/zsh 与 /usr/bin/zsh 是同一个东西（usrmerge），比较解析后的真实路径
+	current="$(current_login_shell)"
+	resolved_zsh="$(readlink -f "$zsh_bin" 2>/dev/null || echo "$zsh_bin")"
+	resolved_now="$(readlink -f "${current:-/nonexistent}" 2>/dev/null || echo "${current:-}")"
+	if [[ -n "$current" && "$resolved_now" == "$resolved_zsh" ]]; then
+		ok "登录 shell 已是 zsh（${current}）"
+		return 0
+	fi
+
+	if ! grep -qxF "$zsh_bin" /etc/shells 2>/dev/null; then
+		warn "${zsh_bin} 不在 /etc/shells 中，chsh 会拒绝执行"
+		warn "请手动添加后执行：chsh -s ${zsh_bin}"
+		return 0
+	fi
+
+	log "登录 shell：${current:-未知} → ${zsh_bin}"
+	confirm "把登录 shell 改成 ${zsh_bin}？" || {
+		log "已跳过，可稍后手动执行：chsh -s ${zsh_bin}"
+		return 0
+	}
+
+	as_root chsh -s "$zsh_bin" "$(id -un)" \
+		|| die "chsh 失败，请手动执行：chsh -s ${zsh_bin}"
+	ok "登录 shell 已改为 zsh（下次登录生效）"
+}
+
+setup_zsh() {
+	install_omz
+	deploy_zshrc
+	if [[ $WITH_CHSH == true ]]; then
+		setup_login_shell
+	else
+		log "已指定 --no-chsh，跳过登录 shell 修改"
+	fi
+	ok "zsh 配置完成"
+}
+
+# --------------------------------------------------------------------------- #
 # 卸载
 # --------------------------------------------------------------------------- #
 
@@ -909,6 +1045,7 @@ do_uninstall() {
 	log "${RIME_DIR}/（若由本脚本下载过雾凇拼音，整个目录都是本脚本产生的）"
 	log "${FONT_DIR}（若由本脚本下载过 Maple Mono CN 字体）"
 	log "~/.config/{hypr,waybar,kitty,rofi}（若用过 --extras）"
+	log "${HOME}/.zshrc 与 ${OMZ_DIR}/（zsh 配置；若改过登录 shell，还需手动改回：chsh -s \$(command -v bash)"
 
 	step "卸载完成"
 }
@@ -960,7 +1097,18 @@ main() {
 		install_extras
 	fi
 
+	if [[ $WITH_ZSH == true ]]; then
+		setup_zsh
+	fi
+
 	step "全部完成"
+
+	# zsh 没装到就不提这一条
+	local zsh_hint=""
+	if [[ $WITH_ZSH == true ]]; then
+		zsh_hint=$'\n  5. zsh 配置已部署：新开终端即为新配置；改了登录 shell 的需重新登录（或 exec zsh）'
+	fi
+
 	cat <<EOF
 
 下一步：
@@ -970,7 +1118,7 @@ main() {
   3. 修改 src/config.h 或 dwmblocks/blocks.h 后需重新执行 ./${SCRIPT_NAME}
      （或手动 make -C src / make -C dwmblocks）
   4. Super + Escape 手动锁屏；空闲 15 分钟自动熄屏并上锁
-     （时长见 ~/.dwm/autostart.sh 顶部的 SCREEN_TIMEOUT）
+     （时长见 ~/.dwm/autostart.sh 顶部的 SCREEN_TIMEOUT）${zsh_hint}
 
 EOF
 
@@ -980,6 +1128,9 @@ EOF
 	if [[ $USE_SYSTEM_ENV == true ]]; then
 		log "电源策略已写入 ${DCONF_POWER_FILE}（对 GNOME 会话生效）"
 		log "dwm 会话的熄屏由 autostart.sh 的 SCREEN_TIMEOUT 控制（默认 900 秒）"
+	fi
+	if [[ $WITH_ZSH == true ]]; then
+		log "zsh 配置来自 ${ZSH_RC}，改动后重跑 ./${SCRIPT_NAME} 即可同步到 ~/.zshrc"
 	fi
 }
 
