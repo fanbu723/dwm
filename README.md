@@ -1,7 +1,8 @@
 # dwm — 我的 dwm 桌面配置（Arch Linux / Ubuntu）
 
 基于 [dwm 6.4](https://dwm.suckless.org/) 的个人桌面环境配置，包含窗口管理器源码、状态栏程序、
-自启脚本、状态栏脚本、一套 zsh / oh-my-zsh 配置，以及一套附赠的 Hyprland / Waybar / Kitty / Rofi 配置。
+自启脚本、状态栏脚本、一套 zsh / oh-my-zsh 配置，以及一套附赠的通知样式（dunst）
+与 Hyprland / Waybar / Kitty / Rofi 配置。
 
 提供 `install.sh` 一键完成「装依赖 → 编译 → 安装 → 部署脚本（含锁屏 / 熄屏）→ 配置输入法 → 部署 zsh」，
 自动识别 **Arch 系** 与 **Debian / Ubuntu 系** 发行版。
@@ -22,6 +23,7 @@
 - [⚙️ 配置说明](#-配置说明)
 - [🀄 输入法（fcitx5 + 雾凇拼音）](#-输入法fcitx5--雾凇拼音)
 - [🐚 zsh 配置（oh-my-zsh）](#-zsh-配置oh-my-zsh)
+- [🔔 通知（dunst）](#-通知dunst)
 - [🎁 附赠配置（extras/）](#-附赠配置extras)
 - [🗑 卸载](#-卸载)
 - [❓ 常见问题](#-常见问题)
@@ -41,6 +43,8 @@
 - **fcitx5 + 雾凇拼音** 自动配置（含环境变量）
 - **zsh 环境一键部署**：oh-my-zsh（清华镜像）+ 12 个常用插件（自动建议 / 语法高亮 / `z` 跳转等），
   部署 `~/.zshrc` 并可顺手把登录 shell 改成 zsh
+- **通知（dunst）美化 + 点击跳转**：配色与状态栏统一（圆角 / 缝隙 / 半透明 / 图标 / 进度条），
+  左键点通知可直接跳到发通知的程序窗口；中键关一条、右键关全部（见「通知」）
 - 附赠 **Hyprland** 完整配置（`extras/`），与 dwm 共存互不影响
 
 ---
@@ -68,7 +72,8 @@ dwm/
 │   └── statusbar/            #   → ~/.dwm/scripts/
 │       ├── wlan.sh  cpu.sh  memory.sh  volume.sh
 │       └── backlight.sh  battery.sh  date.sh
-├── extras/                   # 附赠配置（Hyprland / Waybar / Kitty / Rofi）
+├── extras/                   # 附赠配置（通知 dunst / Hyprland / Waybar / Kitty / Rofi）
+│   └── dunst/                #   通知样式 + 点击跳窗口的菜单脚本
 ├── zsh/                      # zsh 环境（oh-my-zsh 默认走清华镜像）
 │   ├── zshrc                 #   → ~/.zshrc（主题 / 插件 / 键位）
 │   └── README.md             #   插件清单与手动安装步骤
@@ -88,7 +93,7 @@ dwm/
 | `src/` 只负责 dwm 本体 | `make -C src`、`sudo make -C src install` |
 | 打补丁要进 `src/` | `patch -d src -p1 < patches/xxx.diff`（见 `patches/README.md`） |
 | `scripts/statusbar/`、`scripts/lock.sh` → `~/.dwm/scripts/` | `blocks.h` / `config.h` 里写死了 `~/.dwm/scripts/xxx.sh`，目录名即部署目标 |
-| `extras/<name>/` → `~/.config/<name>/` | 附赠配置，`install.sh --extras` 才会部署 |
+| `extras/<name>/` → `~/.config/<name>/` | 附赠配置（含 dunst 通知），`install.sh --extras` 才会部署 |
 | `zsh/zshrc` → `~/.zshrc` | zsh 主配置（`~/.oh-my-zsh` 不收录在仓库里，由脚本克隆） |
 | 安装统一走 `install.sh` | 它是唯一入口，`Makefile` 只管各自编译 |
 
@@ -126,6 +131,7 @@ dwm/
 | `iproute2` `awk` | 网速模块 | 可选 | 同名 |
 | `unzip` `curl` | 下载 / 解压上游字体与词库 | 可选 | 同名 |
 | `zsh` `git` | zsh 登录 shell；克隆 oh-my-zsh 与插件（见「zsh 配置」） | 可选（`--no-zsh` 可跳过） | 同名 |
+| `wmctrl` | 点通知后激活对应程序窗口（见「通知」；没装只是少一个菜单项） | 可选（`--extras` 才有用） | 同名 |
 
 > 依赖缺失不会让 dwm 起不来，只是对应的状态栏模块显示为空。
 > Ubuntu 上 `picom`、`kitty`、`brightnessctl` 等包在较老版本（如 20.04）可能不存在，
@@ -198,7 +204,7 @@ cd dwm
 | `--no-font` | 跳过 `Maple Mono CN` 字体安装 |
 | `--no-zsh` | 跳过 zsh 配置（oh-my-zsh / 插件 / `~/.zshrc` / 登录 shell） |
 | `--no-chsh` | 只部署 zsh 配置，不改登录 shell |
-| `--extras` | 额外把 `extras/` 部署到 `~/.config/`（Hyprland / Waybar / Kitty / Rofi） |
+| `--extras` | 额外把 `extras/` 部署到 `~/.config/`（dunst 通知样式 + Hyprland / Waybar / Kitty / Rofi） |
 | `--system-env` | 写入系统级配置（需 root）：`/etc/environment` 的输入法环境变量，以及 `/etc/dconf/db/local.d/00-power-settings` 电源策略 |
 | `--prefix DIR` | 安装前缀，默认 `/usr/local` |
 | `--autostart-dir DIR` | 自启文件部署目录，默认 `~/.dwm` |
@@ -219,7 +225,8 @@ cd dwm
 9. 部署 zsh：克隆 oh-my-zsh（清华镜像，已存在则跳过）与两个自定义插件，写入 `~/.zshrc`，
    并在确认后把登录 shell 改成 zsh（`--no-zsh` / `--no-chsh` 可跳过）
 
-加 `--extras` 时另外把 `extras/<name>/` 复制到 `~/.config/<name>/`（覆盖前自动备份）。
+加 `--extras` 时另外把 `extras/<name>/` 复制到 `~/.config/<name>/`（覆盖前自动备份，
+其中的 `*.sh` / `*.py` 会自动补上执行权限）。
 加 `--system-env` 时另外写入系统级电源策略（见「熄屏 / 挂起策略」）。
 
 ---
@@ -720,13 +727,79 @@ ZSH_GH_MIRROR=https://ghproxy.net/https://github.com ./install.sh
 
 ---
 
+## 🔔 通知（dunst）
+
+通知样式收在 `extras/dunst/`，跟着 `--extras` 一起部署到 `~/.config/dunst/`，
+外观与 dwm 状态栏统一（配色取自 `src/config.h`）：
+
+| 仓库文件 | 部署目标 | 作用 |
+| --- | --- | --- |
+| `extras/dunst/dunstrc` | `~/.config/dunst/dunstrc` | 外观（圆角 / 缝隙 / 半透明 / 图标 / 进度条）+ 鼠标行为 |
+| `extras/dunst/dunst-menu.sh` | `~/.config/dunst/dunst-menu.sh` | 点击通知时弹出的动作菜单（多一条「↗ 打开应用」） |
+| `extras/dunst/dunst-sender.sh` | `~/.config/dunst/dunst-sender.sh` | 通知显示时记一笔「哪条通知来自哪个应用」 |
+
+### 外观
+
+| 项 | 取值 | 说明 |
+| --- | --- | --- |
+| 底色 / 前景 | `#222222` / `#bbbbbb` | 与状态栏同色 |
+| 边框 | 普通 `#444444`、正常通知 `#005577` | 用状态栏选中色的那个 cyan 做强调 |
+| 圆角 / 缝隙 | `corner_radius = 10`、`gap_size = 8` | 多条通知之间留缝（需要 picom 在跑） |
+| 半透明 | `transparency = 15` | 对应状态栏的 `baralpha = 0xd0` |
+| 字体 | `Maple Mono CN 11` | 与状态栏同族 |
+| 其它 | 小字应用名、32–56px 圆角图标、进度条 | 改 `format` 可调标题 / 正文排布 |
+
+### 点击行为
+
+| 操作 | 行为 |
+| --- | --- |
+| 左键 | `do_action`：通知自带默认动作就直接执行（多数 IM 会跳到对应聊天 / 窗口）；没有默认动作时弹出菜单 |
+| 中键 | 关掉这一条 |
+| 右键 | 关掉全部 |
+
+弹出的菜单由 `dunst-menu.sh` 提供，**第一项是 `↗ 打开「应用名」`**，选中即跳到发出这条通知的程序窗口；
+其余项（`#动作名`、链接）原样交回 dunst。想「每次都弹菜单」，把 `mouse_left_click` 改成 `context`。
+
+跳窗口需要 `wmctrl`（次选 `xdotool`）：
+
+```bash
+sudo apt install wmctrl      # Debian / Ubuntu
+sudo pacman -S wmctrl        # Arch
+```
+
+> **应用名从哪来**：dunst 喂给菜单的内容只有动作项和链接，不带应用名，而 `dunstctl history`
+> 里只有已经关掉的通知（正在显示的查不到）。所以由 `dunst-sender.sh`（dunstrc 里的 `[sender]` 规则）
+> 在通知显示时把 `DUNST_ID` / `DUNST_APP_NAME` 记到 `~/.cache/dunst-sender.tsv`，点击时再查表：
+> 带动作项的通知能精确对上 id，只有链接的退化成「最近一条通知」。
+> 定位窗口优先用 `.desktop` 里的 `StartupWMClass`，其次拿应用名去比 `WM_CLASS`。
+
+排查用 `~/.cache/dunst-menu.log`（记下每次菜单识别到的应用与结果，`DUNST_MENU_NO_LOG=1` 可关掉）。
+
+### 手动部署
+
+```bash
+mkdir -p ~/.config/dunst
+cp extras/dunst/dunstrc extras/dunst/dunst-menu.sh extras/dunst/dunst-sender.sh ~/.config/dunst/
+chmod +x ~/.config/dunst/dunst-menu.sh ~/.config/dunst/dunst-sender.sh
+
+# 改完配置要重启 dunst 才生效（dunst 1.9 的 dunstctl 还没有 reload 子命令）
+pkill dunst && dunst -b &
+```
+
+> `dunstrc` 里的 `dmenu = sh -c ~/.config/dunst/dunst-menu.sh` 看着绕：dunst 1.9 不会对 `dmenu`
+> 的值做 `~` / `$HOME` 展开，而且只按空格拆参数、不解析引号，所以借 `sh -c` 让 shell 去展开。
+
+---
+
 ## 🎁 附赠配置（extras/）
 
 `extras/` 里是另一套桌面环境 —— **Hyprland** —— 的配置，与 dwm **完全独立**：
 不装它 dwm 照常工作，装了也只是多一个可选的登录会话，两者可以自由切换。
+（外加前面的 dunst 通知样式，同样只在你加 `--extras` 时才部署。）
 
 | 仓库路径 | 部署目标 | 内容 |
 | --- | --- | --- |
+| `extras/dunst/` | `~/.config/dunst/` | 通知样式与点击跳转（见「通知（dunst）」） |
 | `extras/hypr/` | `~/.config/hypr/` | `hyprland.conf`（主配置）、`hyprpaper.conf`（壁纸） |
 | `extras/waybar/` | `~/.config/waybar/` | 状态栏 `config.jsonc` / `style.css` / `scripts/waybar-wttr.py` |
 | `extras/kitty/` | `~/.config/kitty/` | 终端配置（dwm 与 Hyprland 共用） |
@@ -743,6 +816,7 @@ for d in hypr waybar kitty rofi; do
     mkdir -p ~/.config/"$d"
     cp -r extras/"$d"/. ~/.config/"$d"/
 done
+# dunst 的三个文件需要保留执行权限，单独部署，见「通知（dunst）」
 ```
 
 > `kitty` 与 `rofi` 两套配置对 dwm 和 Hyprland 都生效，改一处两边都变。
@@ -769,7 +843,8 @@ done
 | `~/.xprofile` / `~/.xsessionrc` 中标记之间的内容 | 安装输入法时 |
 | `~/.local/share/fcitx5/rime/` | Debian / Ubuntu 上下载雾凇拼音时 |
 | `~/.local/share/fonts/MapleMono-CN/` | Debian / Ubuntu 上下载字体时 |
-| `~/.config/{hypr,waybar,kitty,rofi}` | 用过 `--extras` 时 |
+| `~/.config/{hypr,waybar,kitty,rofi,dunst}` | 用过 `--extras` 时 |
+| `~/.cache/dunst-sender.tsv`、`~/.cache/dunst-menu.log` | 用过 `--extras` 且收到过通知时（dunst 菜单的状态 / 日志） |
 | `~/.zshrc` | 部署 zsh 配置时（原文件已备份为 `~/.zshrc.bak.*`） |
 | `~/.oh-my-zsh/` | 克隆 oh-my-zsh 与插件时（如果改过登录 shell，需要手动改回：`chsh -s "$(command -v bash)"`） |
 | `/etc/dconf/db/local.d/00-power-settings` | 用过 `--system-env` 时（另需检查 `/etc/dconf/profile/user` 里追加的 `system-db:local`） |
@@ -869,6 +944,17 @@ ZSH_GH_MIRROR=https://ghproxy.net/https://github.com ./install.sh
 ```
 
 也可以手动 clone 到 `~/.oh-my-zsh/custom/plugins/`（已存在目录会被跳过），见 `zsh/README.md`。
+
+**Q：左键点了通知，却没有跳到对应程序？**
+1. 先确认装了 `wmctrl`（`command -v wmctrl`）—— 没装时菜单里不会有「↗ 打开…」这一项
+2. 看 `~/.cache/dunst-menu.log`：会记录每次识别到的应用名与结果，以及「未插入「打开」项」的原因
+3. 应用名和窗口的 `WM_CLASS` 差异太大时会匹配不上，可在 `dunstrc` 里给该应用加规则（文件末尾有示例）
+4. 通知本身带「默认动作」时，左键会直接执行那个动作（`do_action`）而不弹菜单；
+   想总是弹菜单就把 `mouse_left_click` 改成 `context`
+
+**Q：同一屏堆了好几条通知，点较早的那条却跳到了别的程序？**
+只有链接（没有动作项）的通知里不带通知 id，只能按「最近一条通知」猜；
+带动作项的通知能精确对上，不会认错。
 
 ---
 
