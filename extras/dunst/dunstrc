@@ -1,0 +1,140 @@
+# dunst 配置 —— 由 dwm 仓库 extras/dunst/ 部署到 ~/.config/dunst/dunstrc
+#
+# 外观与 dwm 状态栏统一，配色取自 src/config.h：
+#   #222222 状态栏底色     → 通知底色
+#   #444444 普通边框       #005577 强调色（正常通知的边框）
+#   #bbbbbb 常规前景       #eeeeee 高亮前景
+#   baralpha = 0xd0（≈82% 不透明）→ transparency = 15
+#
+# 鼠标（左键「跳到对应程序」的核心）：
+#   左键  do_action    有默认动作的通知直接执行（多数 IM 会跳到对应聊天 / 窗口）；
+#                      没有默认动作时 dunst 自动弹出动作菜单，
+#                      菜单第一项由 dunst-menu.sh 提供：「↗ 打开「应用名」」→ 跳到发通知的窗口
+#   中键  close_current 关掉这一条
+#   右键  close_all     关掉全部
+#   想「每次都弹菜单」就把左键改成 context
+#
+# 需要 dunst ≥ 1.9 才有 icon_corner_radius / progress_bar_corner_radius；
+# 更老的版本（如 Ubuntu 22.04 的 1.8）只会打印一行警告，其余照常生效。
+[global]
+    ### 显示 ###
+    monitor = 0
+    follow = mouse
+    width = 360
+    height = 260
+    origin = top-right
+    # 往下让开状态栏（dwm 状态栏高约 30px）
+    offset = 12x48
+    scale = 0
+    notification_limit = 5
+
+    ### 进度条（下载、音量等带 value 提示的通知）###
+    progress_bar = true
+    progress_bar_height = 8
+    progress_bar_frame_width = 0
+    progress_bar_min_width = 240
+    progress_bar_max_width = 360
+    progress_bar_corner_radius = 4
+
+    ### 外观 ###
+    # 0 = 全不透明，100 = 全透明；配合 picom 才有透明效果
+    transparency = 15
+    corner_radius = 10
+    icon_corner_radius = 4
+    # >0 时通知之间留缝（需要 picom），此时 separator_height 被忽略
+    gap_size = 8
+    frame_width = 2
+    frame_color = "#444444"
+    separator_height = 0
+    separator_color = frame
+    sort = yes
+    idle_threshold = 120
+
+    ### 内边距 ###
+    padding = 12
+    horizontal_padding = 14
+    text_icon_padding = 10
+
+    ### 文本 ###
+    font = Maple Mono CN 11
+    line_height = 0
+    markup = full
+    # %a 应用名 / %s 标题 / %b 正文 / %p 进度
+    format = "<span size='small' weight='bold' foreground='#888888'>%a</span>\n<b>%s</b>\n%b"
+    alignment = left
+    vertical_alignment = center
+    show_age_threshold = 60
+    ellipsize = middle
+    ignore_newline = no
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = yes
+
+    ### 图标 ###
+    icon_position = left
+    min_icon_size = 32
+    max_icon_size = 56
+    enable_recursive_icon_lookup = true
+    # Ubuntu 上想用系统主题可改成 Yaru 或 Papirus（见 README 的「通知（dunst）」）
+    icon_theme = Adwaita
+
+    ### 历史 ###
+    sticky_history = yes
+    history_length = 20
+
+    ### 菜单（左键点击无默认动作的通知时弹出）###
+    # 自家包装脚本：在候选列表前插入「↗ 打开「应用名」」，选中即跳到发通知的窗口
+    # 注意：dunst 1.9 不会对 dmenu 的值做 ~ / $HOME 展开（会原样当成文件名去执行），
+    #       而且只按空格拆参数、不解析引号，所以这里借 sh -c 让 shell 去展开 ~。
+    dmenu = sh -c ~/.config/dunst/dunst-menu.sh
+    browser = /usr/bin/xdg-open
+    always_run_script = true
+
+    ### 杂项 ###
+    title = Dunst
+    class = Dunst
+    ignore_dbusclose = false
+
+    ### 鼠标 ###
+    mouse_left_click = do_action
+    mouse_middle_click = close_current
+    mouse_right_click = close_all
+
+[urgency_low]
+    background = "#222222"
+    foreground = "#888888"
+    frame_color = "#444444"
+    timeout = 6
+
+[urgency_normal]
+    background = "#222222"
+    foreground = "#bbbbbb"
+    frame_color = "#005577"
+    timeout = 10
+
+[urgency_critical]
+    background = "#3a1c1c"
+    foreground = "#eeeeee"
+    frame_color = "#d75f5f"
+    timeout = 0
+
+# ---------------------------------------------------------------------------
+# 记录「通知 → 发它的应用」，供点击通知时跳窗口用（见 dunst-menu.sh）
+# script 在每条通知显示时执行，dunst 通过 DUNST_* 环境变量把信息传给它
+[sender]
+    summary = "*"
+    script = ~/.config/dunst/dunst-sender.sh
+
+# ---------------------------------------------------------------------------
+# 按应用微调（示例，去掉注释即可生效）
+#
+# 微信等应用发的通知带 < 之类的字符，关掉 markup 更安全：
+# [wechat]
+#     appname = "WeChat"
+#     markup = no
+#
+# 指定左键点击要执行的动作名（do_action 用哪个动作）：
+# [telegram]
+#     appname = "Telegram Desktop"
+#     action_name = "default"
+# ---------------------------------------------------------------------------

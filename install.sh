@@ -52,7 +52,8 @@ DISTRO_NAME="unknown"
 # ---- 依赖清单：Arch 系（官方仓库） ----
 PKGS_BUILD_ARCH=(base-devel libx11 libxinerama libxft freetype2 fontconfig libxrender)
 PKGS_RUNTIME_ARCH=(kitty rofi feh picom dunst xss-lock slock)
-PKGS_SCRIPT_ARCH=(brightnessctl alsa-utils iproute2 gawk unzip curl xorg-xset)
+# wmctrl：dunst 菜单里「跳到发通知的程序窗口」用（见 extras/dunst/）
+PKGS_SCRIPT_ARCH=(brightnessctl alsa-utils iproute2 gawk unzip curl xorg-xset wmctrl)
 PKGS_IME_ARCH=(fcitx5-im fcitx5-rime)
 PKGS_ZSH_ARCH=(zsh git)
 # AUR（安装失败不中断）
@@ -65,7 +66,7 @@ PKGS_AUR_FONT_ARCH=(maplemono-cn)
 PKGS_BUILD_DEB=(build-essential libx11-dev libxinerama-dev libxft-dev
 	libfreetype6-dev libfontconfig1-dev libxrender-dev)
 PKGS_RUNTIME_DEB=(kitty rofi feh picom dunst xss-lock slock)
-PKGS_SCRIPT_DEB=(brightnessctl alsa-utils iproute2 gawk unzip curl x11-xserver-utils)
+PKGS_SCRIPT_DEB=(brightnessctl alsa-utils iproute2 gawk unzip curl x11-xserver-utils wmctrl)
 PKGS_IME_DEB=(fcitx5 fcitx5-chinese-addons fcitx5-rime fcitx5-config-qt
 	fcitx5-frontend-gtk2 fcitx5-frontend-gtk3 fcitx5-frontend-qt5)
 PKGS_ZSH_DEB=(zsh git)
@@ -137,7 +138,8 @@ ${C_BOLD}选项${C_RESET}
       --no-deps            跳过依赖安装（含字体 / 雾凇拼音下载）
       --no-dwm             跳过 dwm 编译安装
       --no-dwmblocks       跳过 dwmblocks 编译安装
-      --extras             额外部署 extras/ 到 ~/.config/（Hyprland / Waybar / Kitty / Rofi）
+      --extras             额外部署 extras/ 到 ~/.config/
+                           （Hyprland / Waybar / Kitty / Rofi，以及 dunst 通知样式）
       --no-ime             跳过 fcitx5 / 雾凇拼音配置
       --no-font            跳过 Maple Mono CN 字体安装
       --no-zsh             跳过 zsh 配置（oh-my-zsh + 插件 + ~/.zshrc）
@@ -728,6 +730,10 @@ install_extras() {
 
 		mkdir -p "$target"
 		cp -a -- "${d}." "$target"/
+
+		# 附赠配置里的脚本（如 dunst 的菜单包装器）需要可执行权限；
+		# cp -a 会保留仓库里的权限，但 Windows / zip 下载的副本常丢掉，这里统一补上
+		find "$target" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod +x {} +
 		ok "部署 ${name} → ${target}"
 	done
 
@@ -1044,7 +1050,7 @@ do_uninstall() {
 	log "${RIME_DIR}/default.custom.yaml（Rime 方案配置）"
 	log "${RIME_DIR}/（若由本脚本下载过雾凇拼音，整个目录都是本脚本产生的）"
 	log "${FONT_DIR}（若由本脚本下载过 Maple Mono CN 字体）"
-	log "~/.config/{hypr,waybar,kitty,rofi}（若用过 --extras）"
+	log "~/.config/{hypr,waybar,kitty,rofi,dunst}（若用过 --extras）"
 	log "${HOME}/.zshrc 与 ${OMZ_DIR}/（zsh 配置；若改过登录 shell，还需手动改回：chsh -s \$(command -v bash)"
 
 	step "卸载完成"
