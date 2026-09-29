@@ -8,7 +8,13 @@
  * 图标也写在这一列：dwmblocks 会把 icon 拼在脚本输出前面，
  * 所以「图标 + 图标颜色」都归这里管，脚本只负责输出数值
  * （电量低 / 静音这类需要临时改色的，由脚本自己带标记）。
- * 图标是 Nerd Font 字形，写成 \uXXXX（C99 通用字符名）是为了不受文件编码影响。 */
+ * 图标是 Nerd Font 字形，写成 \uXXXX（C99 通用字符名）是为了不受文件编码影响。
+ *
+ * 注意：图标后面那个空格必须写在 ^d^ **里面**（如 "\uf1eb  ^d^"）。
+ * Nerd Font 图标的墨迹比字身宽（Maple Mono NF 约 1.5 个字宽，会伸到右边那个
+ * 字符格里），而 dwm 是按颜色分段逐段画状态栏的，下一段的底色会把上一段
+ * 伸出去的墨迹刷掉，图标就只剩左半截。把空格留在同一个颜色段里，图标
+ * 才有整格空位。 */
 #define CLR_NET         "#7dcfff"       /* 网速：青 */
 #define CLR_CPU         "#e0af68"       /* CPU：琥珀 */
 #define CLR_MEM         "#bb9af7"       /* 内存：紫 */
@@ -20,13 +26,14 @@
 static const Block blocks[] = {
         /*Icon*/        /*Command*/             /*Update Interval*/     /*Update Signal*/
         // 图标前后的空格就是块与块之间的间隔（本配置 delim 为空，不用分隔符）
-        {" ^c" CLR_NET "^\uf1eb^d^ ",   "~/.dwm/scripts/wlan.sh",       1,      0}, //网速
-        {" ^c" CLR_CPU "^\uf2db^d^ ",   "~/.dwm/scripts/cpu.sh",        5,      0}, //cpu占用率
-        {" ^c" CLR_MEM "^\uf1c0^d^ ",   "~/.dwm/scripts/memory.sh",     3,      0}, //内存占用率
-        {" ^c" CLR_VOL "^\uf028^d^ ",   "~/.dwm/scripts/volume.sh",     0,      11}, //音量
-        {" ^c" CLR_BRI "^\uf185^d^ ",   "~/.dwm/scripts/backlight.sh",  0,      11}, //亮度
-        {" ^c" CLR_BAT "^\uf242^d^ ",   "~/.dwm/scripts/battery.sh",    2,      0}, //电量
-        {" ^c" CLR_DATE "^\uf017^d^ ",  "~/.dwm/scripts/date.sh",       1,      0}, //时间
+        // 图标后的两个空格也写在 ^c…^ 段内（原因见上面的注释）
+        {" ^c" CLR_NET "^\uf1eb  ^d^",  "~/.dwm/scripts/wlan.sh",       1,      0}, //网速
+        {" ^c" CLR_CPU "^\uf2db  ^d^",  "~/.dwm/scripts/cpu.sh",        5,      0}, //cpu占用率
+        {" ^c" CLR_MEM "^\uf1c0  ^d^",  "~/.dwm/scripts/memory.sh",     3,      0}, //内存占用率
+        {" ^c" CLR_VOL "^\uf028  ^d^",  "~/.dwm/scripts/volume.sh",     0,     11}, //音量
+        {" ^c" CLR_BRI "^\uf185  ^d^",  "~/.dwm/scripts/backlight.sh",  0,     11}, //亮度
+        {" ^c" CLR_BAT "^\uf242  ^d^",  "~/.dwm/scripts/battery.sh",    2,      0}, //电量
+        {" ^c" CLR_DATE "^\uf017  ^d^", "~/.dwm/scripts/date.sh",       1,      0}, //时间
 };
 
 //sets delimeter between status commands. NULL character ('\0') means no delimeter.

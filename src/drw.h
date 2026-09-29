@@ -27,6 +27,7 @@ typedef struct {
 	GC gc;
 	Clr *scheme;
 	Fnt *fonts;
+	int nofill; /* 1 = drw_text() 只画文字，不刷底色（状态栏分段上色用） */
 } Drw;
 
 /* Drawable abstraction */
@@ -52,6 +53,7 @@ void drw_cur_free(Drw *drw, Cur *cursor);
 /* Drawing context manipulation */
 void drw_setfontset(Drw *drw, Fnt *set);
 void drw_setscheme(Drw *drw, Clr *scm);
+void drw_setnofill(Drw *drw, int nofill);
 
 /* Drawing functions */
 void drw_rect(Drw *drw, int x, int y, unsigned int w, unsigned int h, int filled, int invert);

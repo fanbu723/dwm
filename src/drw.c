@@ -227,6 +227,17 @@ drw_setscheme(Drw *drw, Clr *scm)
 		drw->scheme = scm;
 }
 
+/* 1 = drw_text() 只画文字、不刷矩形底色。
+ * 状态栏是分段上色的（见 dwm.c 的 drawstatus()），每段各刷一次底色会把
+ * 上一段末尾字形伸出字身的墨迹一起抹掉——Nerd Font 图标普遍比字身宽
+ * （Maple Mono NF 的图标约 1.5 字宽），右半截就这样被吃掉了。 */
+void
+drw_setnofill(Drw *drw, int nofill)
+{
+	if (drw)
+		drw->nofill = nofill;
+}
+
 void
 drw_rect(Drw *drw, int x, int y, unsigned int w, unsigned int h, int filled, int invert)
 {
@@ -265,8 +276,10 @@ drw_text(Drw *drw, int x, int y, unsigned int w, unsigned int h, unsigned int lp
 	if (!render) {
 		w = invert ? invert : ~invert;
 	} else {
-		XSetForeground(drw->dpy, drw->gc, drw->scheme[invert ? ColFg : ColBg].pixel);
-		XFillRectangle(drw->dpy, drw->drawable, drw->gc, x, y, w, h);
+		if (!drw->nofill) {
+			XSetForeground(drw->dpy, drw->gc, drw->scheme[invert ? ColFg : ColBg].pixel);
+			XFillRectangle(drw->dpy, drw->drawable, drw->gc, x, y, w, h);
+		}
 		d = XftDrawCreate(drw->dpy, drw->drawable, drw->visual, drw->cmap);
 		x += lpad;
 		w -= lpad;

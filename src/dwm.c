@@ -1041,6 +1041,14 @@ drawstatus(int x, int y, int w, int h, unsigned int lpad)
 {
 	int i, cx = x, rw;
 
+	/* 底色先整片刷一次，再让各段只画文字（drw_setnofill）：
+	 * 所有分段的底色都一样（SchemeNorm 的背景），所以整片刷一次就够；
+	 * 逐段刷会把上一段末尾字形伸出字身的墨迹抹掉，Nerd Font 图标
+	 * 比字身宽，右半截会被吃掉（见 README 常见问题）。 */
+	drw_setscheme(drw, scheme[SchemeNorm]);
+	drw_rect(drw, x, y, w, h, 1, 1);
+	drw_setnofill(drw, 1);
+
 	for (i = 0; i < ssegn; i++) {
 		rw = x + w - cx;
 		if (rw <= 0)
@@ -1051,6 +1059,8 @@ drawstatus(int x, int y, int w, int h, unsigned int lpad)
 		 * 不是文字末尾，拿它当光标会一下跳到状态栏最右边。 */
 		cx += (i == 0 ? lpad : 0) + drw_fontset_getwidth(drw, sseg[i].text);
 	}
+
+	drw_setnofill(drw, 0);
 }
 
 void
