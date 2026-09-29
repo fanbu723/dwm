@@ -76,6 +76,12 @@
 > `XCopyArea` 而不是 `drw_map()`；以及浮层取消映射时会产生一个假的 `EnterNotify`（指针
 > 「进入」下面那个窗口），必须在设焦点前吃掉它。
 
+> 状态栏文字的颜色标记（`^c#RRGGBB^` / `^d^`，`statusparse()`、`statuswidth()`、`drawstatus()`、
+> `statusclrget()`）也是自己写的精简版，只做前景色，没搬上游 `statuscolors` / `status2d` 那套
+> 背景色 / 画矩形。注意量宽度、算点击区间都得用 `statuswidth()`（跳过标记），
+> 而且 `drw_text()` 渲染时返回的是**矩形右边界**（`x + (render ? w : 0)`）而不是文字末尾，
+> 分段画的时候光标要自己按 `drw_fontset_getwidth()` 往前推。
+
 ## 归档的 diff
 
 本目录只保存了两个原始 diff：

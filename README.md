@@ -37,7 +37,8 @@
   全屏、每个标签独立记忆布局参数（pertag）
 - **窗口预览 / 切换**：按住 `Super` 弹出浮层列出本标签所有窗口，`Super + Tab` /
   `Super + Shift + Tab` 前后切换，松手才真正切过去（见「窗口预览（长按 Super）」）
-- **dwmblocks** 状态栏：网速 / CPU / 内存 / 音量 / 亮度 / 电量 / 时间
+- **dwmblocks** 状态栏：网速 / CPU / 内存 / 音量 / 亮度 / 电量 / 时间，每块带图标与自己的颜色，
+  电量低、CPU / 内存吃紧、静音、断网会按阈值变色
 - **自动锁屏**：`xss-lock` 监听空闲 / 熄屏 / 挂起事件自动上锁，锁屏程序自动挑选（`slock` / `i3lock` / `betterlockscreen`）；`Super + Escape` 手动锁屏
 - **熄屏 / 挂起策略**：dwm 会话空闲 15 分钟熄屏（`xset` + DPMS，`SCREEN_TIMEOUT` 可调）；`--system-env` 时写入 dconf，禁止自动挂起（GNOME / GDM）
 - **一键安装脚本** `install.sh`：幂等、支持 `--dry-run`、支持 `--uninstall`
@@ -127,7 +128,7 @@ dwm/
 | `xorg-xset` | 空闲熄屏 / DPMS（`xset`，见「熄屏 / 挂起策略」） | `scripts/autostart.sh` | `x11-xserver-utils` |
 | `fcitx5-im` `fcitx5-rime` | 输入法 | 可选 | `fcitx5` `fcitx5-rime` `fcitx5-chinese-addons` `fcitx5-config-qt` `fcitx5-frontend-*` |
 | `rime-ice-git` | 雾凇拼音方案 | 可选 | 无对应包，脚本从 [上游 release](https://github.com/iDvel/rime-ice/releases) 下载 |
-| `maplemono-cn` | 界面字体 `Maple Mono CN` | 可选 | 无对应包，脚本从 [上游 release](https://github.com/subframe7536/maple-font/releases) 下载 |
+| `maplemono-nf-cn` | 界面字体 `Maple Mono NF CN`（**NF** = 带 Nerd Font 图标，状态栏图标要用它） | 可选 | 无对应包，脚本从 [上游 release](https://github.com/subframe7536/maple-font/releases) 下载 `MapleMono-NF-CN.zip` |
 | `brightnessctl` | 屏幕亮度（回退 `xbacklight` → `/sys`） | 可选 | 同名 |
 | `alsa-utils` 或 `pipewire-pulse` | 音量（优先 `pactl`，回退 `amixer`） | 可选 | 同名 |
 | `iproute2` `awk` | 网速模块 | 可选 | 同名 |
@@ -164,7 +165,7 @@ cd dwm
   在右下角**齿轮**里选择 **Dwm**（或 "Ubuntu on Xorg"）再登录。
 * 输入法环境变量写入的是 `~/.xsessionrc`（Debian 系 `/etc/X11/Xsession` 会读取它），
   而不是 Arch 常见的 `~/.xprofile`。两者同时存在 `~/.config/environment.d/10-ime.conf`。
-* 雾凇拼音与 `Maple Mono CN` 字体没有打包，脚本会从 GitHub release 下载并安装到用户目录：
+* 雾凇拼音与 `Maple Mono NF CN` 字体没有打包，脚本会从 GitHub release 下载并安装到用户目录：
   * `~/.local/share/fcitx5/rime/`（雾凇拼音）
   * `~/.local/share/fonts/MapleMono-CN/`（字体，装完自动 `fc-cache -f`）
 
@@ -203,7 +204,7 @@ cd dwm
 | `--no-dwm` | 不编译安装 dwm 本体（只装状态栏 / 配置） |
 | `--no-dwmblocks` | 不编译安装状态栏 |
 | `--no-ime` | 跳过 fcitx5 安装与雾凇拼音配置 |
-| `--no-font` | 跳过 `Maple Mono CN` 字体安装 |
+| `--no-font` | 跳过 `Maple Mono NF CN` 字体安装 |
 | `--no-zsh` | 跳过 zsh 配置（oh-my-zsh / 插件 / `~/.zshrc` / 登录 shell） |
 | `--no-chsh` | 只部署 zsh 配置，不改登录 shell |
 | `--extras` | 额外把 `extras/` 部署到 `~/.config/`（dunst 通知样式 + Hyprland / Waybar / Kitty / Rofi） |
@@ -216,7 +217,7 @@ cd dwm
 
 1. 检测发行版（Arch 系 / Debian 系 / 其它），选择对应的包管理器与包名
 2. 安装缺失依赖；可选依赖（字体、雾凇拼音）失败只告警不中断
-   - Debian 系上额外从 GitHub 下载 **雾凇拼音**（`rime-ice`）与 **Maple Mono CN** 字体
+   - Debian 系上额外从 GitHub 下载 **雾凇拼音**（`rime-ice`）与 **Maple Mono NF CN** 字体
 3. `make -C src` 编译 dwm → `sudo make -C src install`（默认装到 `/usr/local/bin`）
 4. 编译安装 `dwmblocks`
 5. 部署 `scripts/autostart.sh` → `~/.dwm/autostart.sh`，
@@ -281,7 +282,7 @@ curl -fL -o /tmp/rime-ice.zip \
     https://github.com/iDvel/rime-ice/releases/download/nightly/full.zip
 unzip -oq /tmp/rime-ice.zip -d ~/.local/share/fcitx5/rime
 
-# 4. Maple Mono CN 字体（状态栏图标依赖，同样来自上游发布包）
+# 4. Maple Mono NF CN 字体（状态栏图标依赖，同样来自上游发布包）
 mkdir -p ~/.local/share/fonts/MapleMono-CN
 curl -fL -o /tmp/maple.zip \
     https://github.com/subframe7536/maple-font/releases/latest/download/MapleMono-NF-CN.zip
@@ -521,7 +522,7 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | 变量 | 当前值 | 说明 |
 | --- | --- | --- |
 | `MODKEY` | `Mod4Mask` | 主修饰键 = Super |
-| `fonts` | `Maple Mono CN:style=Bold:size=12` | 状态栏字体（缺失会导致方块乱码） |
+| `fonts` | `Maple Mono NF CN:style=Bold:size=12`（回退 `Maple Mono CN`） | 状态栏字体；**NF 变体**才有 Nerd Font 图标，缺失会显示成方框 |
 | `gappih` / `gappiv` / `gappoh` / `gappov` | `10` | 默认间隙 |
 | `baralpha` | `0xd0` | 状态栏透明度 |
 | `borderpx` | `1` | 窗口边框宽度 |
@@ -534,18 +535,37 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 
 ### blocks.h 与状态栏信号
 
-| 模块 | 脚本 | 间隔(秒) | 信号 |
-| --- | --- | --- | --- |
-| 网速 | `scripts/statusbar/wlan.sh` | 1 | — |
-| CPU | `scripts/statusbar/cpu.sh` | 5 | — |
-| 内存 | `scripts/statusbar/memory.sh` | 3 | — |
-| 音量 | `scripts/statusbar/volume.sh` | 0 | **11** |
-| 亮度 | `scripts/statusbar/backlight.sh` | 0 | **11** |
-| 电量 | `scripts/statusbar/battery.sh` | 2 | — |
-| 时间 | `scripts/statusbar/date.sh` | 1 | — |
+| 模块 | 图标（Nerd Font 码点） | 图标颜色 | 脚本 | 间隔(秒) | 信号 |
+| --- | --- | --- | --- | --- | --- |
+| 网速 | `\uf1eb` 无线 | `#7dcfff` 青 | `scripts/statusbar/wlan.sh` | 1 | — |
+| CPU | `\uf2db` 芯片 | `#e0af68` 琥珀 | `scripts/statusbar/cpu.sh` | 5 | — |
+| 内存 | `\uf1c0` 存储 | `#bb9af7` 紫 | `scripts/statusbar/memory.sh` | 3 | — |
+| 音量 | `\uf028` 喇叭 | `#9ece6a` 绿 | `scripts/statusbar/volume.sh` | 0 | **11** |
+| 亮度 | `\uf185` 太阳 | `#ff9e64` 橙 | `scripts/statusbar/backlight.sh` | 0 | **11** |
+| 电量 | `\uf242` 电池 | `#9ece6a` 绿 | `scripts/statusbar/battery.sh` | 2 | — |
+| 时间 | `\uf017` 时钟 | `#a9b1d6` 灰蓝 | `scripts/statusbar/date.sh` | 1 | — |
 
 > 上表是**仓库内**的路径；部署后都在 `~/.dwm/scripts/`（`blocks.h` 里写死的就是后者）。
-> 模块之间用 `delim` 分隔，当前为 `" | "`。
+> 图标与图标颜色都写在 `blocks.h` 的 `icon` 字段里（dwmblocks 会把它拼在脚本输出前面），
+> 所以脚本只管输出数值。
+> 块与块之间**没有分隔符**（`delim` 为空），靠 `icon` 字段里的空格 + 各自的颜色分组；
+> 想换回分隔符就把 `delim` 改成 `" | "`（同时把 `delimLen` 改成它的长度）。
+
+### 状态栏颜色标记
+
+`dwm` 的 `statusparse()` 认识两种标记，`blocks.h` 和各脚本都用它上色：
+
+| 标记 | 作用 |
+| --- | --- |
+| `^c#RRGGBB^` | 后面这段文字用这个前景色 |
+| `^d^` | 还原成默认前景色（`SchemeNorm` 的 `col_gray3`） |
+
+> 标记本身不显示、也不占宽度，所以状态栏的位置与点击区域都不受影响。
+> 颜色只在六位十六进制合法时生效，写错了会当普通字符画出来（不会把 dwm 搞挂）。
+> 默认配色在 `blocks.h` 顶部的 `CLR_*` 宏里，换颜色改那里就行。
+>
+> 按阈值临时改色的地方：CPU ≥70% 琥珀 / ≥90% 红，内存 ≥70% / ≥85%，
+> 电量充电中青 + `+`、≤20% 琥珀、≤10% 红，音量静音琥珀，网速断网红。
 
 > **间隔为 0 的模块只在收到信号时刷新**，也就是音量和亮度。
 > 调整音量 / 亮度后需要通知 dwmblocks 刷新：
@@ -661,11 +681,13 @@ sleep-inactive-battery-timeout=0
 
 ### 字符字体
 
-状态栏图标依赖 Nerd Font 字形，本配置使用 `Maple Mono CN`：
+状态栏图标依赖 Nerd Font 字形，本配置使用它的 **NF 变体** `Maple Mono NF CN`
+（普通变体 `Maple Mono CN` 没有图标字形，装了状态栏也是方框）：
 
 ```bash
-# Arch
-yay -S maplemono-cn
+# Arch：包名是 -nf-cn（普通变体 maplemono-cn 不含 Nerd Font 图标；
+# 另有 maplemono-nf（非中文）、maplemono-nf-cn-unhinted 等拆分包）
+yay -S maplemono-nf-cn
 
 # Debian / Ubuntu：装到用户字体目录
 mkdir -p ~/.local/share/fonts/MapleMono-CN
@@ -778,7 +800,7 @@ ZSH_GH_MIRROR=https://ghproxy.net/https://github.com ./install.sh
 | 边框 | 普通 `#444444`、正常通知 `#005577` | 用状态栏选中色的那个 cyan 做强调 |
 | 圆角 / 缝隙 | `corner_radius = 10`、`gap_size = 8` | 多条通知之间留缝（需要 picom 在跑） |
 | 半透明 | `transparency = 15` | 对应状态栏的 `baralpha = 0xd0` |
-| 字体 | `Maple Mono CN 11` | 与状态栏同族 |
+| 字体 | `Maple Mono NF CN 11` | 与状态栏同族 |
 | 其它 | 小字应用名、32–56px 圆角图标、进度条 | 改 `format` 可调标题 / 正文排布 |
 
 ### 点击行为
@@ -948,8 +970,11 @@ done
 `Super + Shift + Tab`，松手时才真正切过去。
 
 **Q：状态栏图标显示成方块？**
-缺少 `Maple Mono CN` 字体或该字体不含对应 Nerd Font 字形。
-Debian / Ubuntu 上可用 `fc-list | grep -i 'Maple Mono CN'` 确认字体是否装上。
+状态栏图标是 Nerd Font 字形，只有 **NF 变体**（族名 `Maple Mono NF CN`）才有；
+普通变体 `Maple Mono CN` 不含图标，装了也会是方框。
+用 `fc-match 'Maple Mono NF CN'`（或 `fc-list | grep -i 'Maple Mono NF'`）确认字体；
+Arch 上对应包名是 `maplemono-nf-cn`，Debian / Ubuntu 用脚本下载的 `MapleMono-NF-CN.zip`。
+另外 `config.h` 的 `fonts` 列表里**第一个**必须是 NF 变体：dwm 会按顺序找第一个含该字形的字体。
 
 **Q：改了 `config.h` / `blocks.h` 之后要做什么？**
 两者都是编译期配置：dwm 需 `make -C src && sudo make -C src install`，
