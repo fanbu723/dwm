@@ -68,6 +68,14 @@
 > `togglewin()` 拿 NULL 去 `HIDDEN()` 就是向 X 查询窗口 0 → BadWindow → `xerror()` 里 `die()`，
 > 表现就是「点一下状态栏窗口名 dwm 直接退出」。现在 `togglewin()` 遇到 NULL 直接返回。
 
+> 「长按 Super 弹窗口预览」+ `Super + Tab` / `Super + Shift + Tab` 切窗口（`previewshow()`、
+> `previewdraw()`、`previewlist()`、`previewhide()`、`switchwin()`、`keyrelease()`、`superkeydown()`）
+> 不来自上游任何补丁，是本仓库自己写的：`grabkeys()` 单独抓 Super 键，`run()` 用带超时的
+> `select` 判长按，预览浮层是自己建的 override_redirect 窗口（不参与管理，也不吃鼠标）。
+> 改这块要注意两件事：浮层内容画在状态栏那个 pixmap 上、但窗口原点不同，所以用
+> `XCopyArea` 而不是 `drw_map()`；以及浮层取消映射时会产生一个假的 `EnterNotify`（指针
+> 「进入」下面那个窗口），必须在设焦点前吃掉它。
+
 ## 归档的 diff
 
 本目录只保存了两个原始 diff：

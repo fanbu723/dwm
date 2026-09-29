@@ -35,6 +35,8 @@
 
 - **dwm 6.4** 深度定制：窗口间隙（vanitygaps）、状态栏半透明 + 系统托盘、暂存窗口、
   全屏、每个标签独立记忆布局参数（pertag）
+- **窗口预览 / 切换**：按住 `Super` 弹出浮层列出本标签所有窗口，`Super + Tab` /
+  `Super + Shift + Tab` 前后切换，松手才真正切过去（见「窗口预览（长按 Super）」）
 - **dwmblocks** 状态栏：网速 / CPU / 内存 / 音量 / 亮度 / 电量 / 时间
 - **自动锁屏**：`xss-lock` 监听空闲 / 熄屏 / 挂起事件自动上锁，锁屏程序自动挑选（`slock` / `i3lock` / `betterlockscreen`）；`Super + Escape` 手动锁屏
 - **熄屏 / 挂起策略**：dwm 会话空闲 15 分钟熄屏（`xset` + DPMS，`SCREEN_TIMEOUT` 可调）；`--system-env` 时写入 dconf，禁止自动挂起（GNOME / GDM）
@@ -344,9 +346,29 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | `Super + Escape` | 锁屏（`~/.dwm/scripts/lock.sh`，自动挑 slock / i3lock / betterlockscreen） |
 | `Super + b` | 显示 / 隐藏状态栏 |
 | `Super + Enter` | 窗口在主区 / 栈区之间切换（zoom） |
-| `Super + Tab` | 切回上一个视图 |
+| `Super + Tab` / `Super + Shift + Tab` | 切到下一个 / 上一个用过的窗口（配合长按 Super 的预览浮层，见下） |
+| `Super + BackSpace` | 切回上一个视图（原来是 `Super + Tab`） |
 | `Super + Shift + c` | 关闭当前窗口 |
 | `Super + Shift + q` | 退出 dwm |
+
+#### 窗口预览（长按 Super）
+
+按住 `Super` 不放（默认 350ms）会在屏幕中间弹出一个浮层，列出**本标签的所有窗口**，
+按「最近用过」排序，当前窗口高亮：
+
+| 操作 | 效果 |
+| --- | --- |
+| 长按 `Super` 后松手 | 只是看一眼：浮层消失，焦点不变 |
+| `Super + Tab` | 高亮往后一格（上一个用过的窗口），松手才真正切过去 |
+| `Super + Shift + Tab` | 高亮往前一格，到头绕回去 |
+| 点浮层 | 关掉浮层，不切换 |
+
+> 浮层和状态栏任务条用的是同一套配色：高亮行反色（`SchemeSel`），隐藏中的窗口青色
+> （`SchemeHid`），窗口名格式为 `序号. 名字`，标题行是 `标签名 第几个/共几个`。
+> 切到一个隐藏中的窗口会顺带把它恢复。
+> 长按时长在 `config.h` 的 `previewholdms`（毫秒），设为 `0` 就只保留 `Super + Tab`
+> 的切换浮层、不要长按预览。
+> 浮层里只列**当前显示器 + 当前标签**的窗口；预览只影响焦点，不会移动窗口。
 
 ### 音量 / 亮度
 
@@ -475,7 +497,9 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 | 把窗口移到标签 n | `Alt + Shift + 1..9` | 同上游（Alt → Super） |
 | 追加 / 移除标签 n | `Alt + Ctrl + 1..9` | 同上游（Alt → Super） |
 | 切换当前窗口的标签 n | `Alt + Ctrl + Shift + 1..9` | 同上游（Alt → Super） |
-| 当前视图 ↔ 上一个视图 | `Alt + Tab` | 同上游（Alt → Super） |
+| 当前视图 ↔ 上一个视图 | `Alt + Tab` | `Super + BackSpace` |
+| 切到上一个用过的窗口（alt-tab 式） | — 上游没有 | `Super + Tab` / `Super + Shift + Tab` |
+| 长按预览本标签所有窗口 | — 上游没有 | 按住 `Super`（`previewholdms`） |
 | 查看全部标签 | `Alt + 0` | ❌ 被 `Super + 0`（间隙开关）占用 |
 | 把窗口放到全部标签 | `Alt + Shift + 0` | ❌ 被 `Super + Shift + 0`（恢复默认间隙）占用 |
 | 聚焦上 / 下一个显示器 | `Alt + ,` / `.` | 同上游（Alt → Super） |
@@ -912,6 +936,16 @@ done
 **Q：fcitx5 在 kitty / GTK 应用里打不出中文？**
 检查环境变量是否生效（`env | grep IM_MODULE`）、`fcitx5-gtk`/`fcitx5-qt` 是否安装，
 以及是否重新登录过。
+
+**Q：长按 Super 不弹窗口预览？**
+先确认 `config.h` 里 `previewholdms` 不是 `0`（`0` = 关掉长按预览）。
+另外，按住 Super 的期间只要又按了别的键（包括 `Super + Tab`）或者点了鼠标，
+这一次按住就不再自动弹预览了——后者是故意的，免得 `Super + 左键` 拖窗口拖到一半
+弹出浮层。`Super + Tab` 自己会把浮层带出来。
+
+**Q：从状态栏点到预览浮层，预览就没了，光标还留在原地？**
+点浮层只是「关掉预览」，不会切换窗口，这是故意的：想切换就用 `Super + Tab` /
+`Super + Shift + Tab`，松手时才真正切过去。
 
 **Q：状态栏图标显示成方块？**
 缺少 `Maple Mono CN` 字体或该字体不含对应 Nerd Font 字形。
