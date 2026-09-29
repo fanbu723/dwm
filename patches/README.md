@@ -34,7 +34,7 @@
 | --- | --- | --- |
 | vanitygaps | 在窗口之间留出间隙 | `incrgaps` / `incrihgaps` / `incrovgaps`，`config.h` 的 `gappih` `gappiv` `gappoh` `gappov` |
 | alphasystray | 状态栏半透明 + 系统托盘 | `baralpha`、`alphas[]`、`showsystray` |
-| awesomebar | 状态栏显示窗口标题与隐藏态、点击标题切窗口 | `enum SchemeHid`、`togglewin()` |
+| awesomebar | 状态栏把本标签的窗口平铺成任务条（隐藏的变青色），点击切换 / 隐藏 / 恢复窗口 | `enum SchemeHid`、`hide()` / `show()`、`togglewin()`、`m->bt` / `m->btw` |
 | pertag | 每个标签独立记忆布局与参数 | `struct Pertag`、`m->pertag->*` |
 | fullscreen | 窗口全屏（`Super + Shift + f`） | `fullscreen()` |
 | scratchpad | 任意标签都能呼出暂存终端（``Super + ` ``） | `togglescratch()` |
@@ -55,6 +55,18 @@
 > 没有归档 diff：`src/dwm.c` 里 `clientmessage()` 的 `netatom[NetActiveWindow]` 分支就是它的全部代码。
 > 上游 dwm 对这个请求只给窗口置「紧急」标记（边框变色）而不抢焦点，所以不打这个补丁时，
 > 点 dunst 通知菜单只会让目标窗口闪一下。
+
+> `awesomebar` 只在状态栏中部（任务条）生效，要三处配合，改一处得同时看另两处：
+> `drawbar()` 把本标签的窗口平铺成等宽分段，并记下 `m->bt`（窗口数）/ `m->btw`（任务区总宽）；
+> `buttonpress()` 用同一套宽度把点击的 x 反查成窗口（塞进 `arg.v`）再交给 `togglewin()`；
+> `config.h` 的 `alphas[]` 必须跟 `colors[]` 一样补上 `[SchemeHid]`，因为 `setup()` 是按
+> `LENGTH(colors)` 取 `alphas[i]` 建色板的，少一项就是越界读。
+> 上游 6.2 的 diff 还带 `HIDDEN()`（`focus()` / `nexttiled()` 里跳过隐藏窗口）、`hide()` / `show()`，
+> 这些在本仓库里都已保留。
+>
+> 历史坑：dwm 6.4 重写过的 `buttonpress()` 里**没有**「反查窗口」那几行时，`arg.v` 恒为 NULL，
+> `togglewin()` 拿 NULL 去 `HIDDEN()` 就是向 X 查询窗口 0 → BadWindow → `xerror()` 里 `die()`，
+> 表现就是「点一下状态栏窗口名 dwm 直接退出」。现在 `togglewin()` 遇到 NULL 直接返回。
 
 ## 归档的 diff
 
