@@ -16,14 +16,28 @@ for bat in /sys/class/power_supply/BAT*; do
 done
 
 if [ "$count" -gt 0 ]; then
-	printf '%s%%%s\n' "$((percent / count))" "${charging:++}"
+	pct=$((percent / count))
+	if [ -n "$charging" ]; then
+		printf '^c#7dcfff^%s%%+^d^\n' "$pct"	# 充电中：青色 + 加号
+	elif [ "$pct" -le 10 ]; then
+		printf '^c#f7768e^%s%%^d^\n' "$pct"	# 快没电：红
+	elif [ "$pct" -le 20 ]; then
+		printf '^c#e0af68^%s%%^d^\n' "$pct"	# 偏少：琥珀
+	else
+		printf '%s%%\n' "$pct"
+	fi
 	exit 0
 fi
 
 if command -v acpi >/dev/null 2>&1; then
 	acpi -b 2>/dev/null | awk 'NR == 1 {
 		if (match($0, /[0-9]+%/)) p = substr($0, RSTART, RLENGTH)
-		if (p != "") printf "%s%s\n", p, (index($0, "Charging") ? "+" : "")
+		if (p == "") exit
+		sub(/%/, "", p)
+		if (index($0, "Charging")) printf "^c#7dcfff^%s%%+^d^\n", p
+		else if (p + 0 <= 10)      printf "^c#f7768e^%s%%^d^\n", p
+		else if (p + 0 <= 20)      printf "^c#e0af68^%s%%^d^\n", p
+		else                       printf "%s%%\n", p
 	}'
 	exit 0
 fi

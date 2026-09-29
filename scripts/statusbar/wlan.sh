@@ -9,7 +9,7 @@ cache="${XDG_RUNTIME_DIR:-/tmp}/dwmblocks-wlan-$(id -u).cache"
 
 iface=$(ip route get 8.8.8.8 2>/dev/null | awk '{print $5; exit}')
 if [ -z "$iface" ]; then
-	printf '%s\n' "无网络"
+	printf '%s\n' "^c#f7768e^无网络^d^"
 	exit 0
 fi
 
@@ -48,5 +48,5 @@ function fmt(bps) {
 }
 BEGIN {
 	if (dt <= 0) { print "—"; exit }
-	printf "%s⬇ %s⬆\n", fmt(drx * 1e9 / dt), fmt(dtx * 1e9 / dt)
+	printf "↓ %s ↑ %s\n", fmt(drx * 1e9 / dt), fmt(dtx * 1e9 / dt)
 }'

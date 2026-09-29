@@ -14,7 +14,9 @@
 #define SIGMINUS		SIGRTMIN
 #endif
 #define LENGTH(X)               (sizeof(X) / sizeof (X[0]))
-#define CMDLENGTH		50
+/* 每块 icon + 输出的字节上限。现在 icon 里含 ^c#RRGGBB^ / ^d^ 颜色标记，
+ * 所以比上游默认的 50 宽一点（dwm 的 stext 已相应改成 512）。 */
+#define CMDLENGTH		64
 #define MIN( a, b ) ( ( a < b) ? a : b )
 #define STATUSLENGTH (LENGTH(blocks) * CMDLENGTH + 1)
 

@@ -272,6 +272,10 @@ static void show(Client *c);
 static void showhide(Client *c);
 static void sigchld(int unused);
 static void spawn(const Arg *arg);
+static int statusclrget(const char *name);
+static int statusparse(const char *text);
+static unsigned int statuswidth(void);
+static void drawstatus(int x, int y, int w, int h, unsigned int lpad);
 static int superkeydown(KeyCode code);
 static void switchwin(const Arg *arg);
 static Monitor *systraytomon(Monitor *m);
@@ -317,7 +321,9 @@ static const char autostartsh[] = "autostart.sh";
 static const char broken[] = "broken";
 static const char dwmdir[] = "dwm";
 static const char localshare[] = ".local/share";
-static char stext[256];
+/* 状态栏文字来自根窗口的 WM_NAME（dwmblocks 写的），里面可能带颜色标记，
+ * 所以留得比可见文字宽一些 */
+static char stext[512];
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh;               /* bar height */
@@ -356,6 +362,19 @@ static int useargb = 0;
 static Visual *visual;
 static int depth;
 static Colormap cmap;
+
+/* 状态栏文字里的颜色标记（见 statusparse()） */
+#define STATUSCLR_MAX 16     /* 颜色缓存槽数 */
+#define STATUSSEG_MAX 32     /* 最多切成几段（7 个模块，每块几个标记） */
+typedef struct {
+	int clr;                 /* statusclrscm 的下标，-1 = 用默认配色 */
+	char text[64];           /* 这一段的可见文字 */
+} StatusSeg;
+static Clr statusclrscm[STATUSCLR_MAX][3];
+static char statusclrname[STATUSCLR_MAX][8];
+static int statusclrnext = 0;
+static StatusSeg sseg[STATUSSEG_MAX];
+static int ssegn = 0;
 
 /* 窗口预览浮层：长按 Super 弹出，同时当 Super+Tab / Super+Shift+Tab 的切换界面 */
 static Window pvwin = None;      /* 浮层窗口：override_redirect，dwm 不管它 */
@@ -556,6 +575,7 @@ buttonpress(XEvent *e)
 		focus(NULL);
 	}
 	if (ev->window == selmon->barwin) {
+		statusparse(stext); /* 量状态栏宽度要用解析结果（跳过颜色标记） */
 		i = x = 0;
 		for (c = m->clients; c; c = c->next)
 			occ |= c->tags == 255 ? 0 : c->tags;
@@ -570,8 +590,9 @@ buttonpress(XEvent *e)
 			arg.ui = 1 << i;
 		} else if (ev->x < x + TEXTW(selmon->ltsymbol))
 			click = ClkLtSymbol;
-		/* 状态栏文字的起始边界，要和 drawbar() 里的 sw 一致（含 2px 右内边距） */
-		else if (ev->x > selmon->ww - (TEXTW(stext) - lrpad / 2 + 2) - getsystraywidth())
+		/* 状态栏文字的起始边界，要和 drawbar() 里的 sw 一致（含 2px 右内边距）；
+		 * 宽度只算可见文字，颜色标记不占位 */
+		else if (ev->x > selmon->ww - (statuswidth() + lrpad / 2 + 2) - getsystraywidth())
 			click = ClkStatusText;
 		else {
 			/* 任务条：按 drawbar() 记录的段宽把点击的 x 落到具体窗口上，
@@ -943,9 +964,11 @@ drawbar(Monitor *m)
 
 	/* draw status first so it can be overdrawn by tags later */
 	if (m == selmon) { /* status is only drawn on selected monitor */
-		drw_setscheme(drw, scheme[SchemeNorm]);
-		sw = TEXTW(stext) - lrpad / 2 + 2; /* 2px right padding */
-		drw_text(drw, m->ww - sw - stw, 0, sw, bh, lrpad / 2 - 2, stext, 0);
+		/* 状态栏文字里可能有 ^c#RRGGBB^ / ^d^ 颜色标记：先解析，
+		 * 再按「可见文字」算宽度（标记不占位），最后分段上色画出来 */
+		statusparse(stext);
+		sw = statuswidth() + lrpad / 2 + 2; /* 2px right padding */
+		drawstatus(m->ww - sw - stw, 0, sw, bh, lrpad / 2 - 2);
 	}
 
 	resizebarwin(m);
@@ -1011,6 +1034,23 @@ drawbars(void)
 
 	for (m = mons; m; m = m->next)
 		drawbar(m);
+}
+
+void
+drawstatus(int x, int y, int w, int h, unsigned int lpad)
+{
+	int i, cx = x, rw;
+
+	for (i = 0; i < ssegn; i++) {
+		rw = x + w - cx;
+		if (rw <= 0)
+			break;
+		drw_setscheme(drw, sseg[i].clr < 0 ? scheme[SchemeNorm] : statusclrscm[sseg[i].clr]);
+		drw_text(drw, cx, y, rw, h, i == 0 ? lpad : 0, sseg[i].text, 0);
+		/* 游标得自己往前推：drw_text() 渲染时返回的是矩形右边界（x + w），
+		 * 不是文字末尾，拿它当光标会一下跳到状态栏最右边。 */
+		cx += (i == 0 ? lpad : 0) + drw_fontset_getwidth(drw, sseg[i].text);
+	}
 }
 
 void
@@ -2566,6 +2606,89 @@ spawn(const Arg *arg)
 		execvp(((char **)arg->v)[0], (char **)arg->v);
 		die("dwm: execvp '%s' failed:", ((char **)arg->v)[0]);
 	}
+}
+
+/* 状态栏文字里的颜色标记（脚本给每块上色用，语法参照上游 statuscolors 补丁）：
+ *   ^c#RRGGBB^   后面这段文字换成这个前景色
+ *   ^d^          还原成默认前景色
+ * 标记本身不显示、也不占宽度，所以量宽度和算点击区间时都得跳过它们。 */
+int
+statusclrget(const char *name)
+{
+	int i;
+
+	for (i = 0; i < STATUSCLR_MAX; i++)
+		if (!strcmp(statusclrname[i], name))
+			return i;
+
+	/* 没命中：轮着覆盖一个槽位（状态栏来回用到的颜色就那几种） */
+	i = statusclrnext;
+	statusclrnext = (statusclrnext + 1) % STATUSCLR_MAX;
+	if (statusclrname[i][0])
+		XftColorFree(dpy, visual, cmap, &statusclrscm[i][ColFg]);
+	snprintf(statusclrname[i], sizeof statusclrname[i], "%s", name);
+	drw_clr_create(drw, &statusclrscm[i][ColFg], name, OPAQUE);
+	statusclrscm[i][ColBg] = scheme[SchemeNorm][ColBg];
+	statusclrscm[i][ColBorder] = scheme[SchemeNorm][ColBorder];
+	return i;
+}
+
+int
+statusparse(const char *text)
+{
+	const char *p = text, *q;
+	size_t len;
+	int clr = -1, j;
+	char name[8];
+
+	ssegn = 0;
+	while (*p && ssegn < STATUSSEG_MAX) {
+		/* ^c#RRGGBB^：六位十六进制才认，免得脚本写错把 dwm 弄挂 */
+		if (p[0] == '^' && p[1] == 'c' && p[2] == '#' && (q = strchr(p + 3, '^'))
+		&& q - p - 3 == 6) {
+			for (j = 0; j < 6; j++) {
+				char h = p[3 + j];
+
+				if (!((h >= '0' && h <= '9') || (h >= 'a' && h <= 'f')
+				|| (h >= 'A' && h <= 'F')))
+					break;
+			}
+			if (j == 6) {
+				snprintf(name, sizeof name, "#%.*s", 6, p + 3);
+				clr = statusclrget(name);
+				p = q + 1;
+				continue;
+			}
+		}
+		if (p[0] == '^' && p[1] == 'd' && p[2] == '^') {
+			clr = -1;
+			p += 3;
+			continue;
+		}
+		/* 普通文字：一直取到下一个标记 */
+		for (q = p; *q && !(q[0] == '^' && (q[1] == 'c' || q[1] == 'd')); q++)
+			;
+		len = MIN((size_t)(q - p), sizeof sseg[ssegn].text - 1);
+		if (!len)
+			len = 1; /* 认不出来的标记当普通字符画，保证每轮至少前进一个字节 */
+		memcpy(sseg[ssegn].text, p, len);
+		sseg[ssegn].text[len] = '\0';
+		sseg[ssegn].clr = clr;
+		ssegn++;
+		p += len;
+	}
+	return ssegn;
+}
+
+unsigned int
+statuswidth(void)
+{
+	unsigned int w = 0;
+	int i;
+
+	for (i = 0; i < ssegn; i++)
+		w += drw_fontset_getwidth(drw, sseg[i].text);
+	return w;
 }
 
 void

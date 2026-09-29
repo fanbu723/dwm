@@ -29,7 +29,11 @@ if [ -z "$old_total" ]; then
 	exit 0
 fi
 
+# 70% 以上标琥珀、90% 以上标红（dwm 认 ^c#RRGGBB^ / ^d^ 标记）
 awk -v di="$((idle - old_idle))" -v dt="$((total - old_total))" 'BEGIN {
 	if (dt <= 0) { print "—"; exit }
-	printf "%.0f%%\n", 100 * (1 - di / dt)
+	pct = 100 * (1 - di / dt)
+	if (pct >= 90)      printf "^c#f7768e^%.0f%%^d^\n", pct
+	else if (pct >= 70) printf "^c#e0af68^%.0f%%^d^\n", pct
+	else                printf "%.0f%%\n", pct
 }'

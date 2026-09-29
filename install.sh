@@ -58,7 +58,8 @@ PKGS_IME_ARCH=(fcitx5-im fcitx5-rime)
 PKGS_ZSH_ARCH=(zsh git)
 # AUR（安装失败不中断）
 PKGS_AUR_RIME_ARCH=(rime-ice-git)
-PKGS_AUR_FONT_ARCH=(maplemono-cn)
+# 状态栏图标要 Nerd Font 字形，所以装 NF 变体（maplemono-cn 是不带图标的普通变体）
+PKGS_AUR_FONT_ARCH=(maplemono-nf-cn)
 
 # ---- 依赖清单：Debian / Ubuntu 系（apt） ----
 # 注意：Debian 系没有 fcitx5-im / rime-ice-git / maplemono-cn 这类元包或 AUR 包，
@@ -141,7 +142,7 @@ ${C_BOLD}选项${C_RESET}
       --extras             额外部署 extras/ 到 ~/.config/
                            （Hyprland / Waybar / Kitty / Rofi，以及 dunst 通知样式）
       --no-ime             跳过 fcitx5 / 雾凇拼音配置
-      --no-font            跳过 Maple Mono CN 字体安装
+      --no-font            跳过 Maple Mono NF CN 字体安装
       --no-zsh             跳过 zsh 配置（oh-my-zsh + 插件 + ~/.zshrc）
       --no-chsh            部署 zsh 配置，但不改登录 shell
       --system-env         写入系统级配置（需 root，影响全局）：
@@ -154,7 +155,7 @@ ${C_BOLD}选项${C_RESET}
   -h, --help               显示本帮助
 
 ${C_BOLD}发行版支持${C_RESET}
-  - Arch 系：pacman + yay/paru（雾凇拼音、Maple Mono CN 走 AUR）
+  - Arch 系：pacman + yay/paru（雾凇拼音、Maple Mono NF CN 走 AUR）
   - Debian / Ubuntu 系：apt，雾凇拼音与字体从上游 GitHub 发布包下载
   - 其它发行版：加 --no-deps 跳过依赖步骤，自行准备编译工具链
 
@@ -527,9 +528,9 @@ install_rime_ice() {
 	rm -rf -- "$tmp"
 }
 
-# ---- 可选上游资源：Maple Mono CN 字体（Nerd Font，状态栏图标依赖） ----
+# ---- 可选上游资源：Maple Mono NF CN 字体（Nerd Font，状态栏图标依赖） ----
 install_font() {
-	step "安装 Maple Mono CN 字体"
+	step "安装 Maple Mono NF CN 字体"
 
 	# 注意：不要写成 "fc-list | grep -q"，grep -q 命中后会提前退出，
 	# 使 fc-list 收到 SIGPIPE，在 pipefail 下整条管道被判为失败。
@@ -539,11 +540,12 @@ install_font() {
 	elif have fc-list; then
 		local fonts
 		fonts="$(fc-list 2>/dev/null || true)"
-		[[ "$fonts" == *"Maple Mono CN"* ]] && font_installed=true
+		# 认 NF 变体：图标字形只在它里面（族名 "Maple Mono NF CN"）
+		[[ "$fonts" == *"Maple Mono NF CN"* ]] && font_installed=true
 	fi
 
 	if [[ $font_installed == true ]]; then
-		ok "系统中已存在 Maple Mono CN，跳过"
+		ok "系统中已存在 Maple Mono NF CN，跳过"
 		return 0
 	fi
 

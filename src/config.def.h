@@ -17,8 +17,9 @@ static const int topbar             = 1;        /* 0 means bottom bar */
 /* 长按 Super 多少毫秒后弹出「本标签窗口预览」浮层（浮层同时当 Super+Tab 的切换界面）。
  * 0 = 关掉长按预览，Super+Tab / Super+Shift+Tab 的切换浮层照旧可用。 */
 static const int previewholdms      = 350;
-static const char *fonts[]          = { "Maple Mono CN:style=Bold:size=12" };
-static const char dmenufont[]       = "Maple Mono CN:style=Bold:size=12";
+static const char *fonts[]          = { "Maple Mono NF CN:style=Bold:size=12",
+                                        "Maple Mono CN:style=Bold:size=12" };
+static const char dmenufont[]       = "Maple Mono NF CN:style=Bold:size=12";
 static const char col_gray1[]       = "#222222";
 static const char col_gray2[]       = "#444444";
 static const char col_gray3[]       = "#bbbbbb";
