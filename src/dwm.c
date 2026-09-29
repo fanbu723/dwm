@@ -535,10 +535,26 @@ buttonpress(XEvent *e)
 			arg.ui = 1 << i;
 		} else if (ev->x < x + TEXTW(selmon->ltsymbol))
 			click = ClkLtSymbol;
-		else if (ev->x > selmon->ww - TEXTW(stext) - getsystraywidth())
+		/* 状态栏文字的起始边界，要和 drawbar() 里的 sw 一致（含 2px 右内边距） */
+		else if (ev->x > selmon->ww - (TEXTW(stext) - lrpad / 2 + 2) - getsystraywidth())
 			click = ClkStatusText;
-		else
+		else {
+			/* 任务条：按 drawbar() 记录的段宽把点击的 x 落到具体窗口上，
+			 * 拿不到窗口时 arg.v 保持 NULL，由 togglewin() 兜底不做任何事。 */
 			click = ClkWinTitle;
+			x += TEXTW(selmon->ltsymbol);
+			if (m->bt > 0 && m->btw > 0) {
+				for (c = m->clients; c; c = c->next) {
+					if (!ISVISIBLE(c))
+						continue;
+					x += (1.0 / (double)m->bt) * m->btw;
+					if (ev->x <= x)
+						break;
+				}
+				if (c)
+					arg.v = c;
+			}
+		}
 	} else if ((c = wintoclient(ev->window))) {
 		focus(c);
 		restack(selmon);
@@ -878,7 +894,7 @@ dirtomon(int dir)
 void
 drawbar(Monitor *m)
 {
-	int x, w, sw = 0, stw = 0;
+	int x, w, sw = 0, stw = 0, n = 0, scm;
 	int boxs = drw->fonts->h / 9;
 	int boxw = drw->fonts->h / 6 + 2;
 	unsigned int i, occ = 0, urg = 0;
@@ -899,6 +915,8 @@ drawbar(Monitor *m)
 
 	resizebarwin(m);
 	for (c = m->clients; c; c = c->next) {
+		if (ISVISIBLE(c))
+			n++;
 		occ |= c->tags == 255 ? 0 : c->tags;
 		if (c->isurgent)
 			urg |= c->tags;
@@ -919,16 +937,35 @@ drawbar(Monitor *m)
 	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
 	if ((w = m->ww - sw - stw - x) > bh) {
-		if (m->sel) {
-			drw_setscheme(drw, scheme[m == selmon ? SchemeSel : SchemeNorm]);
-			drw_text(drw, x, 0, w, bh, lrpad / 2, m->sel->name, 0);
-			if (m->sel->isfloating)
-				drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
+		if (n > 0) {
+			/* awesomebar：把本标签的窗口平铺成一条任务栏，
+			 * 选中 = SchemeSel，隐藏中 = SchemeHid，其余 = SchemeNorm，
+			 * 浮动窗口在名字左边补一个小方块。
+			 * 每段宽度固定，buttonpress() 按同样的宽度反查点到了哪个窗口。 */
+			for (c = m->clients; c; c = c->next) {
+				if (!ISVISIBLE(c))
+					continue;
+				if (m->sel == c)
+					scm = SchemeSel;
+				else if (HIDDEN(c))
+					scm = SchemeHid;
+				else
+					scm = SchemeNorm;
+				drw_setscheme(drw, scheme[scm]);
+				drw_text(drw, x, 0, (1.0 / (double)n) * w, bh, lrpad / 2, c->name, 0);
+				if (c->isfloating)
+					drw_rect(drw, x + boxs, boxs, boxw, boxw, c->isfixed, 0);
+				x += (1.0 / (double)n) * w;
+			}
 		} else {
 			drw_setscheme(drw, scheme[SchemeNorm]);
 			drw_rect(drw, x, 0, w, bh, 1, 1);
 		}
 	}
+	/* 任务条的分段信息，buttonpress() 靠它把点击位置换算成窗口；
+	 * 任务区窄到画不下时（w <= bh）上面画的是空矩形，这里置 0 让点击不落到窗口上。 */
+	m->bt = w > bh ? n : 0;
+	m->btw = w;
 	drw_map(drw, m->barwin, 0, 0, m->ww - stw, bh);
 }
 
@@ -2391,6 +2428,13 @@ void
 togglewin(const Arg *arg)
 {
 	Client *c = (Client*)arg->v;
+
+	/* 只有点在任务条上某个窗口名时才会带窗口过来。
+	 * 直接拿 NULL 去 HIDDEN() 会向 X 查询窗口 0 的状态 -> BadWindow，
+	 * dwm 的 xerror() 会 die()，表现就是「点一下状态栏 dwm 就没了」。 */
+	if (!c)
+		return;
+
 	if (c == selmon->sel)
 		hide(c);
 	else {
