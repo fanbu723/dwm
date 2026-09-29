@@ -567,6 +567,12 @@ sudo install -Dm644 dwm.desktop /usr/share/xsessions/dwm.desktop
 > 按阈值临时改色的地方：CPU ≥70% 琥珀 / ≥90% 红，内存 ≥70% / ≥85%，
 > 电量充电中青 + `+`、≤20% 琥珀、≤10% 红，音量静音琥珀，网速断网红。
 
+> **图标后面那些空格要写在 `^d^` 里面**：`blocks.h` 里每个 `icon` 都写成
+> `" ^c" CLR_X "^\uf1eb  ^d^"` 这种形状（空格在 `^d^` 之前，和图标处在同一个颜色段）。
+> 原因：Nerd Font 图标的墨迹比字身宽——`Maple Mono NF CN` 的图标约 1.5 个字宽，
+> 会伸到右边那个字符格里；而状态栏是按颜色分段画的，下一段的底色从图标字身的
+> 右边界开始刷，会把伸出去的那半截一起抹掉（图标就只剩左半截）。详见 FAQ。
+
 > **间隔为 0 的模块只在收到信号时刷新**，也就是音量和亮度。
 > 调整音量 / 亮度后需要通知 dwmblocks 刷新：
 >
@@ -975,6 +981,22 @@ done
 用 `fc-match 'Maple Mono NF CN'`（或 `fc-list | grep -i 'Maple Mono NF'`）确认字体；
 Arch 上对应包名是 `maplemono-nf-cn`，Debian / Ubuntu 用脚本下载的 `MapleMono-NF-CN.zip`。
 另外 `config.h` 的 `fonts` 列表里**第一个**必须是 NF 变体：dwm 会按顺序找第一个含该字形的字体。
+
+**Q：状态栏图标只显示左半截 / 显示不全？**
+Nerd Font 图标的**墨迹比字身宽**：`Maple Mono NF CN` 的图标约 1.5 个字宽，
+会伸到右边那个字符格里。而状态栏是按 `^c…^` / `^d^` 分段画的、每段各自刷一遍底色，
+于是下一段的底色把图标伸出去的那半截一起抹掉了。两处保证图标完整：
+
+- `dwmblocks/blocks.h`：图标后面那两个空格写在 `^d^` **里面**（`"^\uf1eb  ^d^"`），
+  图标在自己的颜色段里就有整格空位。
+  **只改这里、只重编 `dwmblocks` 就可见效**（当前已安装的 dwm 不用动）。
+- `src/dwm.c` 的 `drawstatus()` + `src/drw.c` 的 `drw_setnofill()`：底色整片刷一次、
+  各段只画文字，分段上色不再抹掉相邻字形伸出去的墨迹（以后换字体 / 换图标也不会再被裁）。
+  这处要重新编译安装 dwm 才生效：`./install.sh` 或 `sudo make -C src install`，然后重新登录。
+
+> 排查：先用 `xprop -root WM_NAME` 看 dwmblocks 交出来的状态栏字符串。
+> 标记和图标都在、只是画出来缺半截 —— 那就是本条讲的分段刷底色问题；
+> 字符串里干脆没有图标，则是 `blocks.h` / 脚本那边的问题。
 
 **Q：改了 `config.h` / `blocks.h` 之后要做什么？**
 两者都是编译期配置：dwm 需 `make -C src && sudo make -C src install`，
