@@ -21,6 +21,9 @@ static const int topbar             = 1;        /* 0 means bottom bar */
  * 切到该窗口所在的显示器 / 标签并聚焦（点通知跳窗口靠它）。
  * 0 = 上游行为：只给窗口置紧急标记（边框变色），不抢焦点。 */
 static const int focusonnetactive   = 1;
+/* 长按 Super 多少毫秒后弹出「本标签窗口预览」浮层（浮层同时当 Super+Tab 的切换界面）。
+ * 0 = 关掉长按预览，Super+Tab / Super+Shift+Tab 的切换浮层照旧可用。 */
+static const int previewholdms      = 350;
 static const char *fonts[]          = { "Maple Mono CN:style=Bold:size=12" };
 static const char dmenufont[]       = "Maple Mono CN:style=Bold:size=12";
 static const char col_gray1[]       = "#222222";
@@ -152,7 +155,11 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_equal,  spawn,          SHCMD(AUDIO_UP       "; " REFRESH_STATUS) },
 	{ MODKEY,                       XK_minus,  spawn,          SHCMD(AUDIO_DOWN     "; " REFRESH_STATUS) },
 	{ MODKEY,                       XK_Return, zoom,           {0} },
-	{ MODKEY,                       XK_Tab,    view,           {0} },
+	/* Super+Tab / Super+Shift+Tab：按住 Super 弹出预览浮层并在窗口间切换（松手才切过去） */
+	{ MODKEY,                       XK_Tab,    switchwin,      {.i = +1 } },
+	{ MODKEY|ShiftMask,             XK_Tab,    switchwin,      {.i = -1 } },
+	/* 回到上一个标签（原来是 Super+Tab） */
+	{ MODKEY,                       XK_BackSpace, view,        {0} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
 	{ MODKEY,                       XK_t,      setlayout,      {.v = &layouts[0]} },
 	{ MODKEY,                       XK_f,      setlayout,      {.v = &layouts[1]} },

@@ -27,8 +27,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <X11/cursorfont.h>
@@ -217,6 +219,7 @@ static void grabkeys(void);
 static void hide(Client *c);
 static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
+static void keyrelease(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
@@ -225,7 +228,12 @@ static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
 static Client *nexttiled(Client *c);
+static long long nowms(void);
 static void pop(Client *c);
+static void previewdraw(void);
+static void previewhide(void);
+static void previewlist(void);
+static void previewshow(void);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
@@ -264,6 +272,8 @@ static void show(Client *c);
 static void showhide(Client *c);
 static void sigchld(int unused);
 static void spawn(const Arg *arg);
+static int superkeydown(KeyCode code);
+static void switchwin(const Arg *arg);
 static Monitor *systraytomon(Monitor *m);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -325,6 +335,7 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 	[Expose] = expose,
 	[FocusIn] = focusin,
 	[KeyPress] = keypress,
+	[KeyRelease] = keyrelease,
 	[MappingNotify] = mappingnotify,
 	[MapRequest] = maprequest,
 	[MotionNotify] = motionnotify,
@@ -345,6 +356,21 @@ static int useargb = 0;
 static Visual *visual;
 static int depth;
 static Colormap cmap;
+
+/* 窗口预览浮层：长按 Super 弹出，同时当 Super+Tab / Super+Shift+Tab 的切换界面 */
+static Window pvwin = None;      /* 浮层窗口：override_redirect，dwm 不管它 */
+static Client **pvwins = NULL;   /* 列表里的窗口，按「最近用过」顺序（栈序） */
+static int pvmax = 0;            /* pvwins 当前容量 */
+static int pvcount = 0;          /* 列表长度 */
+static int pvsel = 0;            /* 当前高亮的下标 */
+static int pvrows = 0;           /* 浮层一次最多画几行（不含标题行） */
+static int pvshown = 0;          /* 浮层是否显示中 */
+static int pvswitch = 0;         /* 是否用 Tab 切过：切过，松手才提交焦点 */
+static int pvx, pvy;             /* 浮层左上角（pixmap 坐标，弹出来时算好） */
+static unsigned int pvw, pvh;    /* 浮层尺寸 */
+static int superheld = 0;        /* Super 是否按住 */
+static int superused = 0;        /* 按住 Super 期间又按了别的键 / 点了鼠标 */
+static long long supertime = 0;  /* Super 按下的时刻（毫秒，CLOCK_MONOTONIC） */
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -514,6 +540,15 @@ buttonpress(XEvent *e)
 	XButtonPressedEvent *ev = &e->xbutton;
 
 	click = ClkRootWin;
+	/* 点到预览浮层：当作「关掉预览」，别把这一次点击透成别的窗口的点击 */
+	if (pvshown && ev->window == pvwin) {
+		previewhide();
+		pvswitch = 0;
+		return;
+	}
+	/* 按住 Super 时又点了鼠标（例如 Super+左键拖窗口）：这次按住就不再弹预览 */
+	if (superheld)
+		superused = 1;
 	/* focus monitor if necessary */
 	if ((m = wintomon(ev->window)) && m != selmon) {
 		unfocus(selmon->sel, 1);
@@ -1025,6 +1060,11 @@ expose(XEvent *e)
 	Monitor *m;
 	XExposeEvent *ev = &e->xexpose;
 
+	if (ev->window == pvwin) {
+		/* 预览浮层被盖住又露出来：重画一次 */
+		previewdraw();
+		return;
+	}
 	if (ev->count == 0 && (m = wintomon(ev->window))) {
 		drawbar(m);
 		if (m == selmon)
@@ -1219,6 +1259,7 @@ grabkeys(void)
 	{
 		unsigned int i, j;
 		unsigned int modifiers[] = { 0, LockMask, numlockmask, numlockmask|LockMask };
+		KeySym superkeys[] = { XK_Super_L, XK_Super_R };
 		KeyCode code;
 
 		XUngrabKey(dpy, AnyKey, AnyModifier, root);
@@ -1226,6 +1267,12 @@ grabkeys(void)
 			if ((code = XKeysymToKeycode(dpy, keys[i].keysym)))
 				for (j = 0; j < LENGTH(modifiers); j++)
 					XGrabKey(dpy, code, keys[i].mod | modifiers[j], root,
+						True, GrabModeAsync, GrabModeAsync);
+		/* 单独按住的 Super（不跟别的键）也得能收到，keypress() 靠它判「长按」 */
+		for (i = 0; i < LENGTH(superkeys); i++)
+			if ((code = XKeysymToKeycode(dpy, superkeys[i])))
+				for (j = 0; j < LENGTH(modifiers); j++)
+					XGrabKey(dpy, code, modifiers[j], root,
 						True, GrabModeAsync, GrabModeAsync);
 	}
 }
@@ -1283,11 +1330,59 @@ keypress(XEvent *e)
 
 	ev = &e->xkey;
 	keysym = XKeycodeToKeysym(dpy, (KeyCode)ev->keycode, 0);
+
+	/* 单独按住 Super：不跑绑定，只记下开始时刻，run() 里靠 select 超时判「长按」；
+	 * 自动重复的 Press 直接忽略（superheld 已经是 1）。 */
+	if (keysym == XK_Super_L || keysym == XK_Super_R) {
+		if (!superheld) {
+			superheld = 1;
+			superused = 0;
+			supertime = nowms();
+		}
+		return;
+	}
+	/* 预览浮层开着时按了别的键（不是 Tab 切换）就先收起，而且不提交焦点 */
+	if (pvshown && keysym != XK_Tab) {
+		previewhide();
+		pvswitch = 0;
+	}
+	/* 按住 Super 的期间又按了别的键：这一次按住不再自动弹预览 */
+	if (superheld)
+		superused = 1;
 	for (i = 0; i < LENGTH(keys); i++)
 		if (keysym == keys[i].keysym
 		&& CLEANMASK(keys[i].mod) == CLEANMASK(ev->state)
 		&& keys[i].func)
 			keys[i].func(&(keys[i].arg));
+}
+
+void
+keyrelease(XEvent *e)
+{
+	XKeyEvent *ev = &e->xkey;
+	KeySym keysym = XKeycodeToKeysym(dpy, (KeyCode)ev->keycode, 0);
+	Client *c = NULL;
+
+	if (keysym != XK_Super_L && keysym != XK_Super_R)
+		return;
+	if (superkeydown(ev->keycode))
+		return; /* 自动重复的假松手，键还按着 */
+
+	superheld = 0;
+	superused = 0;
+	if (pvshown) {
+		/* 只有用 Tab 切过才在松手时提交焦点；单纯长按预览看一眼就收 */
+		if (pvswitch && pvcount > 0)
+			c = pvwins[pvsel];
+		previewhide(); /* 顺便把因取消映射产生的那个 EnterNotify 吃掉 */
+		if (c) {
+			if (HIDDEN(c))
+				show(c);
+			focus(c);
+			restack(selmon);
+		}
+	}
+	pvswitch = 0;
 }
 
 void
@@ -1510,6 +1605,189 @@ pop(Client *c)
 	attach(c);
 	focus(c);
 	arrange(c->mon);
+}
+
+long long
+nowms(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+void
+previewlist(void)
+{
+	Client *c;
+	int i;
+
+	pvcount = 0;
+	/* 按栈序（最近用过的排前面）：栈顶就是当前窗口，和 alt-tab 的手感一致 */
+	for (c = selmon->stack; c; c = c->snext) {
+		if (!ISVISIBLE(c))
+			continue;
+		if (pvcount == pvmax) {
+			pvmax = pvmax ? pvmax * 2 : 8;
+			if (!(pvwins = realloc(pvwins, pvmax * sizeof(Client *))))
+				die("dwm: cannot realloc preview list");
+		}
+		pvwins[pvcount++] = c;
+	}
+	/* 高亮当前窗口（正常情况下就是栈顶） */
+	pvsel = 0;
+	for (i = 0; i < pvcount; i++)
+		if (pvwins[i] == selmon->sel) {
+			pvsel = i;
+			break;
+		}
+}
+
+void
+previewshow(void)
+{
+	XSetWindowAttributes wa = {
+		.override_redirect = True,
+		.background_pixel = 0,
+		.border_pixel = 0,
+		.colormap = cmap,
+		.event_mask = ExposureMask|ButtonPressMask
+	};
+	int i, lh = bh, w, tw, pad = 30;
+	unsigned int h;
+	char buf[300];
+
+	if (pvshown || !selmon)
+		return;
+
+	previewlist();
+	pvswitch = 0;
+
+	/* 一次最多画几行：高度不够就只画一屏（预览里会滚动到高亮行） */
+	pvrows = (selmon->wh - 3 * lh) / lh;
+	if (pvrows < 1)
+		pvrows = 1;
+	if (pvrows > pvcount)
+		pvrows = pvcount;
+	h = lh * (pvrows + 1);
+
+	/* 宽度按所有行的最长一条算（不在切换时变来变去），最宽不超过屏幕留边 */
+	for (i = 0; i < LENGTH(tags); i++)
+		if (selmon->tagset[selmon->seltags] & 1 << i)
+			break;
+	snprintf(buf, sizeof buf, "%s  %d/%d", i < LENGTH(tags) ? tags[i] : "?",
+	         pvcount ? pvsel + 1 : 0, pvcount);
+	w = drw_fontset_getwidth(drw, buf) + lrpad;
+	for (i = 0; i < pvcount; i++) {
+		if (*pvwins[i]->name)
+			snprintf(buf, sizeof buf, "%d. %s", i + 1, pvwins[i]->name);
+		else
+			snprintf(buf, sizeof buf, "%d. (untitled)", i + 1);
+		tw = drw_fontset_getwidth(drw, buf) + lrpad;
+		if (tw > w)
+			w = tw;
+	}
+	if (w > selmon->ww - 2 * pad)
+		w = selmon->ww - 2 * pad;
+	if (w < bh)
+		w = bh;
+
+	pvw = w;
+	pvh = h;
+	pvx = selmon->wx + (selmon->ww - w) / 2;
+	pvy = selmon->wy + (selmon->wh - h) / 2;
+
+	if (!pvwin)
+		pvwin = XCreateWindow(dpy, root, pvx, pvy, pvw, pvh, 0, depth,
+		                      InputOutput, visual,
+		                      CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWColormap|CWEventMask, &wa);
+	else
+		XMoveResizeWindow(dpy, pvwin, pvx, pvy, pvw, pvh);
+
+	pvshown = 1;
+	previewdraw();
+	XMapRaised(dpy, pvwin);
+}
+
+void
+previewdraw(void)
+{
+	int i, lh = bh, y, first = 0, n, scm;
+	Client *c;
+	char buf[300];
+
+	if (!pvshown || !pvwin)
+		return;
+
+	/* 窗口多到一屏放不下时滚动，保证高亮行可见 */
+	n = MIN(pvrows, pvcount);
+	if (pvcount > pvrows) {
+		first = pvsel - pvrows / 2;
+		if (first < 0)
+			first = 0;
+		if (first > pvcount - pvrows)
+			first = pvcount - pvrows;
+	}
+
+	/* 标题行：当前标签名 + 第几个 / 共几个 */
+	for (i = 0; i < LENGTH(tags); i++)
+		if (selmon->tagset[selmon->seltags] & 1 << i)
+			break;
+	snprintf(buf, sizeof buf, "%s  %d/%d", i < LENGTH(tags) ? tags[i] : "?",
+	         pvcount ? pvsel + 1 : 0, pvcount);
+	drw_setscheme(drw, scheme[SchemeHid]);
+	drw_text(drw, pvx, pvy, pvw, lh, lrpad / 2, buf, 0);
+
+	/* 每个窗口一行：高亮行用 SchemeSel（底色青色），隐藏中的用 SchemeHid */
+	y = pvy + lh;
+	for (i = first; i < first + n; i++) {
+		c = pvwins[i];
+		scm = i == pvsel ? SchemeSel : (HIDDEN(c) ? SchemeHid : SchemeNorm);
+		drw_setscheme(drw, scheme[scm]);
+		if (*c->name)
+			snprintf(buf, sizeof buf, "%d. %s", i + 1, c->name);
+		else
+			snprintf(buf, sizeof buf, "%d. (untitled)", i + 1);
+		drw_text(drw, pvx, y, pvw, lh, lrpad / 2, buf, 0);
+		y += lh;
+	}
+
+	/* 青色描边 */
+	drw_setscheme(drw, scheme[SchemeHid]);
+	drw_rect(drw, pvx, pvy, pvw, pvh, 0, 0);
+	/* 浮层在 pixmap 里是画在它自己的屏幕位置上的，所以往窗口拷贝得自己区分源 / 目标：
+	 * 源 = pixmap 的 (pvx,pvy)，目标 = 窗口的 (0,0)。
+	 * （drw_map() 会把 x,y 同时当成源和目标，那只适用于像状态栏那样
+	 *   pixmap 原点与窗口原点重合的画法。） */
+	XCopyArea(dpy, drw->drawable, pvwin, drw->gc, pvx, pvy, pvw, pvh, 0, 0);
+	XSync(dpy, False);
+	XRaiseWindow(dpy, pvwin);
+}
+
+void
+previewhide(void)
+{
+	XEvent ev;
+
+	if (!pvshown)
+		return;
+
+	pvshown = 0;
+	if (!pvwin)
+		return;
+
+	XUnmapWindow(dpy, pvwin);
+	/* 浮层盖着指针时，取消映射会让指针「进入」它下面那个窗口，X 随之丢一个
+	 * EnterNotify 过来，dwm 的 enternotify() 会据此改焦点——不把它吃掉，
+	 * 松手时刚设好的焦点立马被它抢回去。这里只清理已经排在队首的那类事件，
+	 * 碰到别的事件就停下，留给主循环正常处理。 */
+	XSync(dpy, False);
+	while (XPending(dpy)) {
+		XPeekEvent(dpy, &ev);
+		if (ev.type != EnterNotify)
+			break;
+		XNextEvent(dpy, &ev);
+	}
 }
 
 void
@@ -1761,11 +2039,36 @@ void
 run(void)
 {
 	XEvent ev;
+	fd_set fds;
+	struct timeval tv;
+	long wait;
+	int fd = ConnectionNumber(dpy);
+
 	/* main event loop */
 	XSync(dpy, False);
-	while (running && !XNextEvent(dpy, &ev))
+	while (running) {
+		/* 只按住 Super 又没干别的：用带超时的 select 等「长按」到点。
+		 * 这段时间没有新事件就说明是在长按，直接弹预览，不必等到松手。 */
+		if (previewholdms > 0 && superheld && !superused && !pvshown) {
+			wait = previewholdms - (long)(nowms() - supertime);
+			if (wait <= 0) {
+				previewshow();
+				continue;
+			}
+			FD_ZERO(&fds);
+			FD_SET(fd, &fds);
+			tv.tv_sec = wait / 1000;
+			tv.tv_usec = (wait % 1000) * 1000;
+			XFlush(dpy);
+			if (select(fd + 1, &fds, NULL, NULL, &tv) == 0) {
+				previewshow();
+				continue;
+			}
+		}
+		XNextEvent(dpy, &ev);
 		if (handler[ev.type])
 			handler[ev.type](&ev); /* call handler */
+	}
 }
 
 void
@@ -2192,9 +2495,10 @@ setup(void)
 	XDeleteProperty(dpy, root, netatom[NetClientList]);
 	/* select events */
 	wa.cursor = cursor[CurNormal]->cursor;
+	/* KeyReleaseMask：单独按住 Super 要能收到它的松手事件（长按预览用） */
 	wa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
 		|ButtonPressMask|PointerMotionMask|EnterWindowMask
-		|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;
+		|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask|KeyReleaseMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
 	grabkeys();
@@ -2970,6 +3274,34 @@ xerrorstart(Display *dpy, XErrorEvent *ee)
 {
 	die("dwm: another window manager is already running");
 	return -1;
+}
+
+int
+superkeydown(KeyCode code)
+{
+	char keys[32];
+
+	/* X 的自动重复会先塞一个假的 KeyRelease 进来，那一刻键其实还按着：
+	 * 直接问一下键盘的物理状态就能分辨（真松手时这一位已经清掉了）。 */
+	XQueryKeymap(dpy, keys);
+	return keys[code / 8] & (1 << (code % 8));
+}
+
+void
+switchwin(const Arg *arg)
+{
+	if (!pvshown)
+		previewshow();
+	if (!pvshown || !pvcount)
+		return;
+
+	/* 前后挪一格：Tab 往后（上一个用过的窗口），Shift+Tab 往前，到头绕回去 */
+	pvsel += arg->i;
+	while (pvsel < 0)
+		pvsel += pvcount;
+	pvsel %= pvcount;
+	pvswitch = 1;
+	previewdraw();
 }
 
 Monitor *

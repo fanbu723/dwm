@@ -14,6 +14,9 @@ static const int systraypinningfailfirst = 1;   /* 1: if pinning fails, display 
 static const int showsystray        = 1;     /* 0 means no systray */
 static const int showbar            = 1;        /* 0 means no bar */
 static const int topbar             = 1;        /* 0 means bottom bar */
+/* 长按 Super 多少毫秒后弹出「本标签窗口预览」浮层（浮层同时当 Super+Tab 的切换界面）。
+ * 0 = 关掉长按预览，Super+Tab / Super+Shift+Tab 的切换浮层照旧可用。 */
+static const int previewholdms      = 350;
 static const char *fonts[]          = { "Maple Mono CN:style=Bold:size=12" };
 static const char dmenufont[]       = "Maple Mono CN:style=Bold:size=12";
 static const char col_gray1[]       = "#222222";
@@ -112,7 +115,11 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_y,      incrovgaps,     {.i = +1 } },
 	{ MODKEY|ShiftMask,             XK_o,      incrovgaps,     {.i = -1 } },
 	{ MODKEY,                       XK_Return, zoom,           {0} },
-	{ MODKEY,                       XK_Tab,    view,           {0} },
+	/* Super+Tab / Super+Shift+Tab：按住 Super 弹出预览浮层并在窗口间切换（松手才切过去） */
+	{ MODKEY,                       XK_Tab,    switchwin,      {.i = +1 } },
+	{ MODKEY|ShiftMask,             XK_Tab,    switchwin,      {.i = -1 } },
+	/* 回到上一个标签（原来是 Super+Tab） */
+	{ MODKEY,                       XK_BackSpace, view,        {0} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
 	{ MODKEY,                       XK_t,      setlayout,      {.v = &layouts[0]} },
 	{ MODKEY,                       XK_f,      setlayout,      {.v = &layouts[1]} },
